@@ -13,7 +13,7 @@ type Primitive interface {
 	SetVisible(bool)
 
 	// Gets whether the primitive should be drawn onto the screen.
-	GetVisible() bool
+	IsVisible() bool
 
 	// GetRect returns the current position of the primitive, x, y, width, and
 	// height.

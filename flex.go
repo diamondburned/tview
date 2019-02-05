@@ -137,7 +137,7 @@ func (f *Flex) Draw(screen tcell.Screen) bool {
 		distSize = height
 	}
 	for _, item := range f.items {
-		if !item.Item.GetVisible() {
+		if !item.Item.IsVisible() {
 			continue
 		}
 
@@ -154,7 +154,7 @@ func (f *Flex) Draw(screen tcell.Screen) bool {
 		pos = y
 	}
 	for _, item := range f.items {
-		if !item.Item.GetVisible() {
+		if !item.Item.IsVisible() {
 			continue
 		}
 
@@ -188,7 +188,7 @@ func (f *Flex) Draw(screen tcell.Screen) bool {
 // Focus is called when this primitive receives focus.
 func (f *Flex) Focus(delegate func(p Primitive)) {
 	for _, item := range f.items {
-		if item.Item != nil && item.Focus && item.Item.GetVisible() {
+		if item.Item != nil && item.Focus && item.Item.IsVisible() {
 			delegate(item.Item)
 			return
 		}
@@ -198,7 +198,7 @@ func (f *Flex) Focus(delegate func(p Primitive)) {
 // HasFocus returns whether or not this primitive has focus.
 func (f *Flex) HasFocus() bool {
 	for _, item := range f.items {
-		if item.Item != nil && item.Item.GetFocusable().HasFocus() && item.Item.GetVisible() {
+		if item.Item != nil && item.Item.GetFocusable().HasFocus() && item.Item.IsVisible() {
 			return true
 		}
 	}

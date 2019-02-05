@@ -106,7 +106,7 @@ func (b *Box) SetVisible(visible bool) {
 }
 
 // GetVisible gets whether the Box should be drawn onto the screen.
-func (b *Box) GetVisible() bool {
+func (b *Box) IsVisible() bool {
 	return b.visible
 }
 
