@@ -65,6 +65,12 @@ type Box struct {
 
 	// An optional function which is called before the box is drawn.
 	draw func(screen tcell.Screen, x, y, width, height int) (int, int, int, int)
+
+	// Handler that gets called when this component receives focus.
+	onFocus func()
+
+	// Handler that gets called when this component loses focus.
+	onBlur func()
 }
 
 // NewBox returns a Box without a border.
@@ -108,6 +114,16 @@ func (b *Box) GetVisible() bool {
 // height.
 func (b *Box) GetRect() (int, int, int, int) {
 	return b.x, b.y, b.width, b.height
+}
+
+// SetOnFocus sets the handler that gets called when Focus() gets called.
+func (b *Box) SetOnFocus(handler func()) {
+	b.onFocus = handler
+}
+
+// SetOnBlur sets the handler that gets called when Blur() gets called.
+func (b *Box) SetOnBlur(handler func()) {
+	b.onBlur = handler
 }
 
 // GetInnerRect returns the position of the inner rectangle (x, y, width,
@@ -439,11 +455,17 @@ func (b *Box) Draw(screen tcell.Screen) bool {
 // Focus is called when this primitive receives focus.
 func (b *Box) Focus(delegate func(p Primitive)) {
 	b.hasFocus = true
+	if b.onFocus != nil {
+		b.onFocus()
+	}
 }
 
 // Blur is called when this primitive loses focus.
 func (b *Box) Blur() {
 	b.hasFocus = false
+	if b.onBlur != nil {
+		b.onBlur()
+	}
 }
 
 // HasFocus returns whether or not this primitive has focus.

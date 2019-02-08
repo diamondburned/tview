@@ -47,6 +47,12 @@ type Primitive interface {
 	// Blur is called by the application when the primitive loses focus.
 	Blur()
 
+	// SetOnFocus sets the handler that gets called when Focus() gets called.
+	SetOnFocus(handler func())
+
+	// SetOnBlur sets the handler that gets called when Blur() gets called.
+	SetOnBlur(handler func())
+
 	// GetFocusable returns the item's Focusable.
 	GetFocusable() Focusable
 }
