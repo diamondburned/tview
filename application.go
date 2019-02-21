@@ -108,6 +108,7 @@ func (a *Application) SetScreen(screen tcell.Screen) *Application {
 	if a.Screen == nil {
 		// Run() has not been called yet.
 		a.Screen = screen
+		a.Screen.EnableMouse()
 		a.Unlock()
 		return a
 	}
@@ -138,6 +139,7 @@ func (a *Application) Run() error {
 			a.Unlock()
 			return err
 		}
+		a.Screen.EnableMouse()
 	}
 
 	// We catch panics to clean up because they mess up the terminal.
@@ -246,6 +248,21 @@ EventLoop:
 				}
 				screen.Clear()
 				a.draw()
+			case *tcell.EventMouse:
+				if event.Buttons() == tcell.ButtonNone {
+					continue
+				}
+
+				atXY := a.GetComponentAt(event.Position())
+				if atXY != nil {
+					mouseSupport, hasMouseSupport := (*atXY).(MouseSupport)
+					if hasMouseSupport {
+						handler := mouseSupport.MouseHandler()
+						if handler != nil && handler(event) {
+							a.draw()
+						}
+					}
+				}
 			}
 
 		// If we have updates, now is the time to execute them.
@@ -257,6 +274,48 @@ EventLoop:
 	// Wait for the event loop to finish.
 	wg.Wait()
 	a.Screen = nil
+
+	return nil
+}
+
+// GetComponentAt returns the highest level component at the given coordinates
+// or zero if no component can be found.
+func (a *Application) GetComponentAt(x, y int) *Primitive {
+	return getComponentAtRecursively(a.root, x, y)
+}
+
+func getComponentAtRecursively(primitive Primitive, x, y int) *Primitive {
+	if !primitive.IsVisible() {
+		return nil
+	}
+
+	flex, isFlex := primitive.(*Flex)
+	if isFlex {
+		for _, child := range flex.items {
+			found := getComponentAtRecursively(child.Item, x, y)
+			if found != nil {
+				return found
+			}
+		}
+	}
+
+	pages, isPages := primitive.(*Pages)
+	if isPages {
+		for _, page := range pages.pages {
+			if page.Visible {
+				found := getComponentAtRecursively(page.Item, x, y)
+				if found != nil {
+					return found
+				}
+				break
+			}
+		}
+	}
+
+	curX, curY, width, height := primitive.GetRect()
+	if x >= curX && y >= curY && x <= (curX+width) && y <= (curY+height) {
+		return &primitive
+	}
 
 	return nil
 }
@@ -297,10 +356,11 @@ func (a *Application) Suspend(f func()) bool {
 
 	// Make a new screen.
 	var err error
-	screen, err = tcell.NewScreen()
+	screen.EnableMouse()
 	if err != nil {
 		panic(err)
 	}
+	screen, err = tcell.NewScreen()
 	a.screenReplacement <- screen
 	// One key event will get lost, see https://github.com/diamondburned/tcell/issues/194
 

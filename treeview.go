@@ -1,6 +1,9 @@
 package tview
 
 import (
+	"strings"
+	"time"
+
 	"github.com/diamondburned/tcell"
 )
 
@@ -134,6 +137,11 @@ func (n *TreeNode) SetSelectable(selectable bool) *TreeNode {
 	return n
 }
 
+// IsSelectable returns wether the node is selectable or not.
+func (n *TreeNode) IsSelectable() bool {
+	return n.selectable
+}
+
 // SetSelectedFunc sets a function which is called when the user selects this
 // node by hitting Enter when it is selected.
 func (n *TreeNode) SetSelectedFunc(handler func()) *TreeNode {
@@ -233,7 +241,7 @@ func (n *TreeNode) SetIndent(indent int) *TreeNode {
 // using SetPrefixes() for different levels, for example to display hierarchical
 // bullet point lists.
 //
-// See https://github.com/rivo/tview/wiki/TreeView for an example.
+// See https://github.com/diamondburned/tview/wiki/TreeView for an example.
 type TreeView struct {
 	*Box
 
@@ -274,6 +282,15 @@ type TreeView struct {
 
 	// The visible nodes, top-down, as set by process().
 	nodes []*TreeNode
+
+	// Decides wether it allows usage of vim bindings for navigation.
+	vimBindings bool
+
+	// Decides wether a search and selection will be triggered on rune input.
+	searchOnType bool
+
+	jumpTime   time.Time
+	jumpBuffer string
 }
 
 // NewTreeView returns a new tree view.
@@ -282,6 +299,8 @@ func NewTreeView() *TreeView {
 		Box:           NewBox(),
 		graphics:      true,
 		graphicsColor: Styles.GraphicsColor,
+		searchOnType:  true,
+		vimBindings:   false,
 	}
 }
 
@@ -360,6 +379,31 @@ func (t *TreeView) SetGraphicsColor(color tcell.Color) *TreeView {
 // a new tree node.
 func (t *TreeView) SetChangedFunc(handler func(node *TreeNode)) *TreeView {
 	t.changed = handler
+	return t
+}
+
+// SetVimBindingsEnabled decides wether the usage of vim bindings for
+// navigation is possible or not. This setting disables the search on
+// rune input.
+func (t *TreeView) SetVimBindingsEnabled(enabled bool) *TreeView {
+	t.vimBindings = enabled
+
+	if enabled {
+		t.searchOnType = false
+	}
+
+	return t
+}
+
+// SetSearchOnTypeEnabled enables / disables search through the tree on rune
+// input.
+func (t *TreeView) SetSearchOnTypeEnabled(enabled bool) *TreeView {
+	t.searchOnType = enabled
+
+	if enabled {
+		t.vimBindings = false
+	}
+
 	return t
 }
 
@@ -663,15 +707,31 @@ func (t *TreeView) InputHandler() func(event *tcell.EventKey, setFocus func(p Pr
 		case tcell.KeyPgUp, tcell.KeyCtrlB:
 			t.movement = treePageUp
 		case tcell.KeyRune:
-			switch event.Rune() {
-			case 'g':
-				t.movement = treeHome
-			case 'G':
-				t.movement = treeEnd
-			case 'j':
-				t.movement = treeDown
-			case 'k':
-				t.movement = treeUp
+			if t.vimBindings {
+				switch event.Rune() {
+				case 'g':
+					t.movement = treeHome
+				case 'G':
+					t.movement = treeEnd
+				case 'j':
+					t.movement = treeDown
+				case 'k':
+					t.movement = treeUp
+				}
+			} else if t.searchOnType {
+				if time.Since(t.jumpTime) > (500 * time.Millisecond) {
+					t.jumpBuffer = ""
+				}
+
+				if event.Key() == tcell.KeyRune {
+					t.jumpTime = time.Now()
+					t.jumpBuffer += strings.ToLower(string(event.Rune()))
+
+					node := t.FindFirstSelectableNode(t.GetRoot(), t.jumpBuffer)
+					if node != nil {
+						t.SetCurrentNode(node)
+					}
+				}
 			}
 		case tcell.KeyEnter:
 			if t.currentNode != nil {
@@ -686,4 +746,24 @@ func (t *TreeView) InputHandler() func(event *tcell.EventKey, setFocus func(p Pr
 
 		t.process()
 	})
+}
+
+// FindFirstSelectableNode iterates through the tree from top to bottom, trying
+// to find a node that is selectable and has the given text as its prefix. The
+// search is case-insensitive.
+func (t *TreeView) FindFirstSelectableNode(node *TreeNode, text string) *TreeNode {
+	for _, child := range node.GetChildren() {
+		if len(child.GetChildren()) == 0 {
+			if child.IsSelectable() && strings.HasPrefix(strings.ToLower(child.GetText()), text) {
+				return child
+			}
+		} else {
+			subResult := t.FindFirstSelectableNode(child, text)
+			if subResult != nil {
+				return subResult
+			}
+		}
+	}
+
+	return nil
 }
