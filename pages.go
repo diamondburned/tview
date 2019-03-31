@@ -233,8 +233,12 @@ func (p *Pages) Focus(delegate func(p Primitive)) {
 }
 
 // Draw draws this primitive onto the screen.
-func (p *Pages) Draw(screen tcell.Screen) {
-	p.Box.Draw(screen)
+func (p *Pages) Draw(screen tcell.Screen) bool {
+	res := p.Box.Draw(screen)
+	if !res {
+		return false
+	}
+
 	for _, page := range p.pages {
 		if !page.Visible {
 			continue
@@ -245,4 +249,6 @@ func (p *Pages) Draw(screen tcell.Screen) {
 		}
 		page.Item.Draw(screen)
 	}
+
+	return true
 }

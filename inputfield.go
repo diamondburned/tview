@@ -233,14 +233,17 @@ func (i *InputField) SetFinishedFunc(handler func(key tcell.Key)) FormItem {
 }
 
 // Draw draws this primitive onto the screen.
-func (i *InputField) Draw(screen tcell.Screen) {
-	i.Box.Draw(screen)
+func (i *InputField) Draw(screen tcell.Screen) bool {
+	res := i.Box.Draw(screen)
+	if !res {
+		return false
+	}
 
 	// Prepare
 	x, y, width, height := i.GetInnerRect()
 	rightLimit := x + width
 	if height < 1 || rightLimit <= x {
-		return
+		return false
 	}
 
 	// Draw label.
@@ -330,6 +333,8 @@ func (i *InputField) Draw(screen tcell.Screen) {
 	if i.focus.HasFocus() {
 		screen.ShowCursor(x+cursorScreenPos, y)
 	}
+
+	return true
 }
 
 // InputHandler returns the handler for this primitive.

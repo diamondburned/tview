@@ -93,7 +93,7 @@ func (b *Button) SetBlurFunc(handler func(key tcell.Key)) *Button {
 }
 
 // Draw draws this primitive onto the screen.
-func (b *Button) Draw(screen tcell.Screen) {
+func (b *Button) Draw(screen tcell.Screen) bool {
 	// Draw the box.
 	borderColor := b.borderColor
 	backgroundColor := b.backgroundColor
@@ -104,7 +104,12 @@ func (b *Button) Draw(screen tcell.Screen) {
 			b.borderColor = borderColor
 		}()
 	}
-	b.Box.Draw(screen)
+
+	res := b.Box.Draw(screen)
+	if !res {
+		return false
+	}
+
 	b.backgroundColor = backgroundColor
 
 	// Draw label.
@@ -117,6 +122,8 @@ func (b *Button) Draw(screen tcell.Screen) {
 		}
 		Print(screen, b.label, x, y, width, AlignCenter, labelColor)
 	}
+
+	return true
 }
 
 // InputHandler returns the handler for this primitive.

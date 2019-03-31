@@ -112,7 +112,11 @@ func (m *Modal) HasFocus() bool {
 }
 
 // Draw draws this primitive onto the screen.
-func (m *Modal) Draw(screen tcell.Screen) {
+func (m *Modal) Draw(screen tcell.Screen) bool {
+	if !m.GetVisible() {
+		return false
+	}
+
 	// Calculate the width of this modal.
 	buttonsWidth := 0
 	for _, button := range m.form.buttons {
@@ -143,4 +147,6 @@ func (m *Modal) Draw(screen tcell.Screen) {
 	// Draw the frame.
 	m.frame.SetRect(x, y, width, height)
 	m.frame.Draw(screen)
+
+	return true
 }

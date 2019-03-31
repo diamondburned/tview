@@ -304,8 +304,11 @@ func (g *Grid) InputHandler() func(event *tcell.EventKey, setFocus func(p Primit
 }
 
 // Draw draws this primitive onto the screen.
-func (g *Grid) Draw(screen tcell.Screen) {
-	g.Box.Draw(screen)
+func (g *Grid) Draw(screen tcell.Screen) bool {
+	res := g.Box.Draw(screen)
+	if !res {
+		return false
+	}
 	x, y, width, height := g.GetInnerRect()
 	screenWidth, screenHeight := screen.Size()
 
@@ -337,7 +340,7 @@ func (g *Grid) Draw(screen tcell.Screen) {
 		}
 	}
 	if rows == 0 || columns == 0 {
-		return // No content.
+		return false // No content.
 	}
 
 	// Where are they located?
@@ -629,4 +632,5 @@ func (g *Grid) Draw(screen tcell.Screen) {
 			}
 		}
 	}
+	return true
 }

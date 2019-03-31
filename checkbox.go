@@ -143,14 +143,17 @@ func (c *Checkbox) SetFinishedFunc(handler func(key tcell.Key)) FormItem {
 }
 
 // Draw draws this primitive onto the screen.
-func (c *Checkbox) Draw(screen tcell.Screen) {
-	c.Box.Draw(screen)
+func (c *Checkbox) Draw(screen tcell.Screen) bool {
+	shouldDraw := c.Box.Draw(screen)
+	if !shouldDraw {
+		return false
+	}
 
 	// Prepare
 	x, y, width, height := c.GetInnerRect()
 	rightLimit := x + width
 	if height < 1 || rightLimit <= x {
-		return
+		return false
 	}
 
 	// Draw label.
@@ -176,6 +179,7 @@ func (c *Checkbox) Draw(screen tcell.Screen) {
 		checkedRune = ' '
 	}
 	screen.SetContent(x, y, checkedRune, nil, fieldStyle)
+	return true
 }
 
 // InputHandler returns the handler for this primitive.

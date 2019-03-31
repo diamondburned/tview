@@ -4,8 +4,13 @@ package main
 import (
 	"fmt"
 
+<<<<<<< HEAD
 	"github.com/gdamore/tcell"
 	"github.com/rivo/tview"
+=======
+	"github.com/Bios-Marcel/tview"
+	"github.com/gdamore/tcell"
+>>>>>>> a3c0f2e... * Added SetVisible and GetVisible methods for Primitives. * Made Flex skip drawing of invisible items. * Made items inheriting from Box skip drawing if Box is invisible. * Made Draw return a bool with whether anything was drawn.
 )
 
 // RadioButtons implements a simple primitive for radio button selections.
@@ -24,8 +29,12 @@ func NewRadioButtons(options []string) *RadioButtons {
 }
 
 // Draw draws this primitive onto the screen.
-func (r *RadioButtons) Draw(screen tcell.Screen) {
-	r.Box.Draw(screen)
+func (r *RadioButtons) Draw(screen tcell.Screen) bool {
+	res := r.Box.Draw(screen)
+	if !res {
+		return false
+	}
+
 	x, y, width, height := r.GetInnerRect()
 
 	for index, option := range r.options {
@@ -39,6 +48,8 @@ func (r *RadioButtons) Draw(screen tcell.Screen) {
 		line := fmt.Sprintf(`%s[white]  %s`, radioButton, option)
 		tview.Print(screen, line, x, y+index, width, tview.AlignLeft, tcell.ColorYellow)
 	}
+
+	return true
 }
 
 // InputHandler returns the handler for this primitive.

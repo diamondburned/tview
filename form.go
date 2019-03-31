@@ -322,8 +322,11 @@ func (f *Form) SetCancelFunc(callback func()) *Form {
 }
 
 // Draw draws this primitive onto the screen.
-func (f *Form) Draw(screen tcell.Screen) {
-	f.Box.Draw(screen)
+func (f *Form) Draw(screen tcell.Screen) bool {
+	res := f.Box.Draw(screen)
+	if !res {
+		return false
+	}
 
 	// Determine the dimensions.
 	x, y, width, height := f.GetInnerRect()
@@ -502,6 +505,8 @@ func (f *Form) Draw(screen tcell.Screen) {
 		// Draw button.
 		button.Draw(screen)
 	}
+
+	return true
 }
 
 // Focus is called by the application when the primitive receives focus.

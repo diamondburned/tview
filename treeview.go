@@ -576,10 +576,14 @@ func (t *TreeView) process() {
 }
 
 // Draw draws this primitive onto the screen.
-func (t *TreeView) Draw(screen tcell.Screen) {
-	t.Box.Draw(screen)
+func (t *TreeView) Draw(screen tcell.Screen) bool {
+	res := t.Box.Draw(screen)
+	if !res {
+		return false
+	}
+
 	if t.root == nil {
-		return
+		return false
 	}
 
 	// Build the tree if necessary.
@@ -686,6 +690,8 @@ func (t *TreeView) Draw(screen tcell.Screen) {
 		// Advance.
 		posY++
 	}
+
+	return true
 }
 
 // InputHandler returns the handler for this primitive.

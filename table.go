@@ -539,8 +539,11 @@ func (t *Table) ScrollToEnd() *Table {
 }
 
 // Draw draws this primitive onto the screen.
-func (t *Table) Draw(screen tcell.Screen) {
-	t.Box.Draw(screen)
+func (t *Table) Draw(screen tcell.Screen) bool {
+	res := t.Box.Draw(screen)
+	if !res {
+		return false
+	}
 
 	// What's our available screen space?
 	x, y, width, height := t.GetInnerRect()
@@ -933,6 +936,8 @@ ColumnLoop:
 			}
 		}
 	}
+
+	return true
 }
 
 // InputHandler returns the handler for this primitive.
