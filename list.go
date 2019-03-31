@@ -17,7 +17,7 @@ type listItem struct {
 
 // List displays rows of items, each of which can be selected.
 //
-// See https://github.com/rivo/tview/wiki/List for an example.
+// See https://github.com/diamondburned/tview/wiki/List for an example.
 type List struct {
 	*Box
 
@@ -373,8 +373,11 @@ func (l *List) Clear() *List {
 }
 
 // Draw draws this primitive onto the screen.
-func (l *List) Draw(screen tcell.Screen) {
-	l.Box.Draw(screen)
+func (l *List) Draw(screen tcell.Screen) bool {
+	res := l.Box.Draw(screen)
+	if !res {
+		return false
+	}
 
 	// Determine the dimensions.
 	x, y, width, height := l.GetInnerRect()
@@ -454,6 +457,8 @@ func (l *List) Draw(screen tcell.Screen) {
 			y++
 		}
 	}
+
+	return true
 }
 
 // InputHandler returns the handler for this primitive.

@@ -208,7 +208,7 @@ func (c *TableCell) GetLastPosition() (x, y, width int) {
 //
 // Use SetInputCapture() to override or modify keyboard input.
 //
-// See https://github.com/rivo/tview/wiki/Table for an example.
+// See https://github.com/diamondburned/tview/wiki/Table for an example.
 type Table struct {
 	*Box
 
@@ -539,8 +539,11 @@ func (t *Table) ScrollToEnd() *Table {
 }
 
 // Draw draws this primitive onto the screen.
-func (t *Table) Draw(screen tcell.Screen) {
-	t.Box.Draw(screen)
+func (t *Table) Draw(screen tcell.Screen) bool {
+	res := t.Box.Draw(screen)
+	if !res {
+		return false
+	}
 
 	// What's our available screen space?
 	x, y, width, height := t.GetInnerRect()
@@ -933,6 +936,8 @@ ColumnLoop:
 			}
 		}
 	}
+
+	return true
 }
 
 // InputHandler returns the handler for this primitive.

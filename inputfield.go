@@ -29,7 +29,7 @@ import (
 //   - Ctrl-W: Delete the last word before the cursor.
 //   - Ctrl-U: Delete the entire line.
 //
-// See https://github.com/rivo/tview/wiki/InputField for an example.
+// See https://github.com/diamondburned/tview/wiki/InputField for an example.
 type InputField struct {
 	*Box
 
@@ -233,14 +233,17 @@ func (i *InputField) SetFinishedFunc(handler func(key tcell.Key)) FormItem {
 }
 
 // Draw draws this primitive onto the screen.
-func (i *InputField) Draw(screen tcell.Screen) {
-	i.Box.Draw(screen)
+func (i *InputField) Draw(screen tcell.Screen) bool {
+	res := i.Box.Draw(screen)
+	if !res {
+		return false
+	}
 
 	// Prepare
 	x, y, width, height := i.GetInnerRect()
 	rightLimit := x + width
 	if height < 1 || rightLimit <= x {
-		return
+		return false
 	}
 
 	// Draw label.
@@ -330,6 +333,8 @@ func (i *InputField) Draw(screen tcell.Screen) {
 	if i.focus.HasFocus() {
 		screen.ShowCursor(x+cursorScreenPos, y)
 	}
+
+	return true
 }
 
 // InputHandler returns the handler for this primitive.

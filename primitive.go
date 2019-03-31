@@ -7,7 +7,13 @@ type Primitive interface {
 	// Draw draws this primitive onto the screen. Implementers can call the
 	// screen's ShowCursor() function but should only do so when they have focus.
 	// (They will need to keep track of this themselves.)
-	Draw(screen tcell.Screen)
+	Draw(screen tcell.Screen) bool
+
+	// Sets whether the primitive should be drawn onto the screen.
+	SetVisible(bool)
+
+	// Gets whether the primitive should be drawn onto the screen.
+	IsVisible() bool
 
 	// GetRect returns the current position of the primitive, x, y, width, and
 	// height.
@@ -40,6 +46,12 @@ type Primitive interface {
 
 	// Blur is called by the application when the primitive loses focus.
 	Blur()
+
+	// SetOnFocus sets the handler that gets called when Focus() gets called.
+	SetOnFocus(handler func())
+
+	// SetOnBlur sets the handler that gets called when Blur() gets called.
+	SetOnBlur(handler func())
 
 	// GetFocusable returns the item's Focusable.
 	GetFocusable() Focusable

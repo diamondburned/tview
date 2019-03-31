@@ -27,7 +27,7 @@ type gridItem struct {
 // and "l" keys) while the grid has focus and none of its contained primitives
 // do.
 //
-// See https://github.com/rivo/tview/wiki/Grid for an example.
+// See https://github.com/diamondburned/tview/wiki/Grid for an example.
 type Grid struct {
 	*Box
 
@@ -304,8 +304,11 @@ func (g *Grid) InputHandler() func(event *tcell.EventKey, setFocus func(p Primit
 }
 
 // Draw draws this primitive onto the screen.
-func (g *Grid) Draw(screen tcell.Screen) {
-	g.Box.Draw(screen)
+func (g *Grid) Draw(screen tcell.Screen) bool {
+	res := g.Box.Draw(screen)
+	if !res {
+		return false
+	}
 	x, y, width, height := g.GetInnerRect()
 	screenWidth, screenHeight := screen.Size()
 
@@ -337,7 +340,7 @@ func (g *Grid) Draw(screen tcell.Screen) {
 		}
 	}
 	if rows == 0 || columns == 0 {
-		return // No content.
+		return false // No content.
 	}
 
 	// Where are they located?
@@ -629,4 +632,5 @@ func (g *Grid) Draw(screen tcell.Screen) {
 			}
 		}
 	}
+	return true
 }

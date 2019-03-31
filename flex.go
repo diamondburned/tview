@@ -23,7 +23,7 @@ type flexItem struct {
 // distributed along that dimension depends on their layout settings, which is
 // either a fixed length or a proportional length. See AddItem() for details.
 //
-// See https://github.com/rivo/tview/wiki/Flex for an example.
+// See https://github.com/diamondburned/tview/wiki/Flex for an example.
 type Flex struct {
 	*Box
 
@@ -115,8 +115,11 @@ func (f *Flex) ResizeItem(p Primitive, fixedSize, proportion int) *Flex {
 }
 
 // Draw draws this primitive onto the screen.
-func (f *Flex) Draw(screen tcell.Screen) {
-	f.Box.Draw(screen)
+func (f *Flex) Draw(screen tcell.Screen) bool {
+	res := f.Box.Draw(screen)
+	if !res {
+		return false
+	}
 
 	// Calculate size and position of the items.
 
@@ -134,6 +137,10 @@ func (f *Flex) Draw(screen tcell.Screen) {
 		distSize = height
 	}
 	for _, item := range f.items {
+		if !item.Item.IsVisible() {
+			continue
+		}
+
 		if item.FixedSize > 0 {
 			distSize -= item.FixedSize
 		} else {
@@ -147,6 +154,10 @@ func (f *Flex) Draw(screen tcell.Screen) {
 		pos = y
 	}
 	for _, item := range f.items {
+		if !item.Item.IsVisible() {
+			continue
+		}
+
 		size := item.FixedSize
 		if size <= 0 {
 			size = distSize * item.Proportion / proportionSum
@@ -170,12 +181,14 @@ func (f *Flex) Draw(screen tcell.Screen) {
 			}
 		}
 	}
+
+	return true
 }
 
 // Focus is called when this primitive receives focus.
 func (f *Flex) Focus(delegate func(p Primitive)) {
 	for _, item := range f.items {
-		if item.Item != nil && item.Focus {
+		if item.Item != nil && item.Focus && item.Item.IsVisible() {
 			delegate(item.Item)
 			return
 		}
@@ -185,7 +198,7 @@ func (f *Flex) Focus(delegate func(p Primitive)) {
 // HasFocus returns whether or not this primitive has focus.
 func (f *Flex) HasFocus() bool {
 	for _, item := range f.items {
-		if item.Item != nil && item.Item.GetFocusable().HasFocus() {
+		if item.Item != nil && item.Item.GetFocusable().HasFocus() && item.Item.IsVisible() {
 			return true
 		}
 	}

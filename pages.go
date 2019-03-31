@@ -16,7 +16,7 @@ type page struct {
 // root primitive. It allows to easily switch the visibility of the contained
 // primitives.
 //
-// See https://github.com/rivo/tview/wiki/Pages for an example.
+// See https://github.com/diamondburned/tview/wiki/Pages for an example.
 type Pages struct {
 	*Box
 
@@ -233,8 +233,12 @@ func (p *Pages) Focus(delegate func(p Primitive)) {
 }
 
 // Draw draws this primitive onto the screen.
-func (p *Pages) Draw(screen tcell.Screen) {
-	p.Box.Draw(screen)
+func (p *Pages) Draw(screen tcell.Screen) bool {
+	res := p.Box.Draw(screen)
+	if !res {
+		return false
+	}
+
 	for _, page := range p.pages {
 		if !page.Visible {
 			continue
@@ -245,4 +249,6 @@ func (p *Pages) Draw(screen tcell.Screen) {
 		}
 		page.Item.Draw(screen)
 	}
+
+	return true
 }

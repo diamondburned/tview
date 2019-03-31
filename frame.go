@@ -15,7 +15,7 @@ type frameText struct {
 // Frame is a wrapper which adds a border around another primitive. The top area
 // (header) and the bottom area (footer) may also contain text.
 //
-// See https://github.com/rivo/tview/wiki/Frame for an example.
+// See https://github.com/diamondburned/tview/wiki/Frame for an example.
 type Frame struct {
 	*Box
 
@@ -81,8 +81,11 @@ func (f *Frame) SetBorders(top, bottom, header, footer, left, right int) *Frame 
 }
 
 // Draw draws this primitive onto the screen.
-func (f *Frame) Draw(screen tcell.Screen) {
-	f.Box.Draw(screen)
+func (f *Frame) Draw(screen tcell.Screen) bool {
+	res := f.Box.Draw(screen)
+	if !res {
+		return false
+	}
 
 	// Calculate start positions.
 	x, top, width, height := f.GetInnerRect()
@@ -92,7 +95,7 @@ func (f *Frame) Draw(screen tcell.Screen) {
 	bottom -= f.bottom
 	width -= f.left + f.right
 	if width <= 0 || top >= bottom {
-		return // No space left.
+		return false // No space left.
 	}
 
 	// Draw text.
@@ -134,12 +137,14 @@ func (f *Frame) Draw(screen tcell.Screen) {
 		bottom = bottomMin - f.footer
 	}
 	if top > bottom {
-		return // No space for the primitive.
+		return true // No space for the primitive.
 	}
 	f.primitive.SetRect(x, top, width, bottom+1-top)
 
 	// Finally, draw the contained primitive.
 	f.primitive.Draw(screen)
+
+	return true
 }
 
 // Focus is called when this primitive receives focus.

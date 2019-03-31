@@ -87,7 +87,7 @@ type textViewIndex struct {
 // The ScrollToHighlight() function can be used to jump to the currently
 // highlighted region once when the text view is drawn the next time.
 //
-// See https://github.com/rivo/tview/wiki/TextView for an example.
+// See https://github.com/diamondburned/tview/wiki/TextView for an example.
 type TextView struct {
 	sync.Mutex
 	*Box
@@ -737,10 +737,13 @@ func (t *TextView) reindexBuffer(width int) {
 }
 
 // Draw draws this primitive onto the screen.
-func (t *TextView) Draw(screen tcell.Screen) {
+func (t *TextView) Draw(screen tcell.Screen) bool {
 	t.Lock()
 	defer t.Unlock()
-	t.Box.Draw(screen)
+	res := t.Box.Draw(screen)
+	if !res {
+		return false
+	}
 
 	// Get the available size.
 	x, y, width, height := t.GetInnerRect()
@@ -757,7 +760,7 @@ func (t *TextView) Draw(screen tcell.Screen) {
 
 	// If we don't have an index, there's nothing to draw.
 	if t.index == nil {
-		return
+		return false
 	}
 
 	// Move to highlighted regions.
@@ -941,6 +944,8 @@ func (t *TextView) Draw(screen tcell.Screen) {
 		t.buffer = t.buffer[t.index[t.lineOffset].Line:]
 		t.index = nil
 	}
+
+	return true
 }
 
 // InputHandler returns the handler for this primitive.

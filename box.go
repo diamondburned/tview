@@ -11,7 +11,7 @@ import (
 // Note that all classes which subclass from Box will also have access to its
 // functions.
 //
-// See https://github.com/rivo/tview/wiki/Box for an example.
+// See https://github.com/diamondburned/tview/wiki/Box for an example.
 type Box struct {
 	// The position of the rect.
 	x, y, width, height int
@@ -21,6 +21,9 @@ type Box struct {
 
 	// Border padding.
 	paddingTop, paddingBottom, paddingLeft, paddingRight int
+
+	// Border Size
+	borderTop, borderBottom, borderLeft, borderRight bool
 
 	// The box's background color.
 	backgroundColor tcell.Color
@@ -51,13 +54,23 @@ type Box struct {
 	// Whether or not this box has focus.
 	hasFocus bool
 
+	visible bool
+
 	// An optional capture function which receives a key event and returns the
 	// event to be forwarded to the primitive's default input handler (nil if
 	// nothing should be forwarded).
 	inputCapture func(event *tcell.EventKey) *tcell.EventKey
 
+	mouseHandler func(event *tcell.EventMouse) bool
+
 	// An optional function which is called before the box is drawn.
 	draw func(screen tcell.Screen, x, y, width, height int) (int, int, int, int)
+
+	// Handler that gets called when this component receives focus.
+	onFocus func()
+
+	// Handler that gets called when this component loses focus.
+	onBlur func()
 }
 
 // NewBox returns a Box without a border.
@@ -70,7 +83,13 @@ func NewBox() *Box {
 		borderColor:     Styles.BorderColor,
 		titleColor:      Styles.TitleColor,
 		titleAlign:      AlignCenter,
+		borderTop:       true,
+		borderBottom:    true,
+		borderLeft:      true,
+		borderRight:     true,
+		visible:         true,
 	}
+
 	b.focus = b
 	return b
 }
@@ -81,10 +100,30 @@ func (b *Box) SetBorderPadding(top, bottom, left, right int) *Box {
 	return b
 }
 
+// SetVisible sets whether the Box should be drawn onto the screen.
+func (b *Box) SetVisible(visible bool) {
+	b.visible = visible
+}
+
+// GetVisible gets whether the Box should be drawn onto the screen.
+func (b *Box) IsVisible() bool {
+	return b.visible
+}
+
 // GetRect returns the current position of the rectangle, x, y, width, and
 // height.
 func (b *Box) GetRect() (int, int, int, int) {
 	return b.x, b.y, b.width, b.height
+}
+
+// SetOnFocus sets the handler that gets called when Focus() gets called.
+func (b *Box) SetOnFocus(handler func()) {
+	b.onFocus = handler
+}
+
+// SetOnBlur sets the handler that gets called when Blur() gets called.
+func (b *Box) SetOnBlur(handler func()) {
+	b.onBlur = handler
 }
 
 // GetInnerRect returns the position of the inner rectangle (x, y, width,
@@ -95,15 +134,23 @@ func (b *Box) GetInnerRect() (int, int, int, int) {
 	}
 	x, y, width, height := b.GetRect()
 	if b.border {
-		x++
-		y++
-		width -= 2
-		height -= 2
+		x += boolToInt(b.borderLeft)
+		y += boolToInt(b.borderTop)
+		width -= boolToInt(b.borderLeft) + boolToInt(b.borderRight)
+		height -= boolToInt(b.borderTop) + boolToInt(b.borderBottom)
 	}
 	return x + b.paddingLeft,
 		y + b.paddingTop,
 		width - b.paddingLeft - b.paddingRight,
 		height - b.paddingTop - b.paddingBottom
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+
+	return 0
 }
 
 // SetRect sets a new position of the primitive. Note that this has no effect
@@ -184,6 +231,16 @@ func (b *Box) GetInputCapture() func(event *tcell.EventKey) *tcell.EventKey {
 	return b.inputCapture
 }
 
+// SetMouseHandler sets the mouse event handler.
+func (b *Box) SetMouseHandler(handler func(event *tcell.EventMouse) bool) {
+	b.mouseHandler = handler
+}
+
+// MouseHandler returns the mouse event handler or nil if none is present.
+func (b *Box) MouseHandler() func(event *tcell.EventMouse) bool {
+	return b.mouseHandler
+}
+
 // SetBackgroundColor sets the box's background color.
 func (b *Box) SetBackgroundColor(color tcell.Color) *Box {
 	b.backgroundColor = color
@@ -200,6 +257,23 @@ func (b *Box) SetBorder(show bool) *Box {
 // SetBorderColor sets the box's border color.
 func (b *Box) SetBorderColor(color tcell.Color) *Box {
 	b.borderColor = color
+	return b
+}
+
+func (b *Box) SetBorderSides(top, left, bottom, right bool) *Box {
+	b.borderTop = top
+	b.borderLeft = left
+	b.borderBottom = bottom
+	b.borderRight = right
+
+	return b
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+
 	return b
 }
 
@@ -232,10 +306,10 @@ func (b *Box) SetTitleAlign(align int) *Box {
 }
 
 // Draw draws this primitive onto the screen.
-func (b *Box) Draw(screen tcell.Screen) {
+func (b *Box) Draw(screen tcell.Screen) bool {
 	// Don't draw anything if there is no space.
-	if b.width <= 0 || b.height <= 0 {
-		return
+	if b.width <= 0 || b.height <= 0 || !b.visible {
+		return false
 	}
 
 	def := tcell.StyleDefault
@@ -252,35 +326,91 @@ func (b *Box) Draw(screen tcell.Screen) {
 
 	// Draw border.
 	if b.border && b.width >= 2 && b.height >= 2 {
-		border := background.Foreground(b.borderColor) | tcell.Style(b.borderAttributes)
-		var vertical, horizontal, topLeft, topRight, bottomLeft, bottomRight rune
-		if b.focus.HasFocus() {
-			horizontal = Borders.HorizontalFocus
-			vertical = Borders.VerticalFocus
-			topLeft = Borders.TopLeftFocus
-			topRight = Borders.TopRightFocus
-			bottomLeft = Borders.BottomLeftFocus
-			bottomRight = Borders.BottomRightFocus
+		var border tcell.Style
+		if b.hasFocus {
+			border = background.Foreground(tcell.ColorBlue) | tcell.Style(b.borderAttributes)
 		} else {
-			horizontal = Borders.Horizontal
-			vertical = Borders.Vertical
-			topLeft = Borders.TopLeft
-			topRight = Borders.TopRight
-			bottomLeft = Borders.BottomLeft
-			bottomRight = Borders.BottomRight
+			border = background.Foreground(b.borderColor) | tcell.Style(b.borderAttributes)
 		}
-		for x := b.x + 1; x < b.x+b.width-1; x++ {
-			screen.SetContent(x, b.y, horizontal, nil, border)
-			screen.SetContent(x, b.y+b.height-1, horizontal, nil, border)
+		var vertical, horizontal, topLeft, topRight, bottomLeft, bottomRight rune
+
+		horizontal = Borders.Horizontal
+		vertical = Borders.Vertical
+		topLeft = Borders.TopLeft
+		topRight = Borders.TopRight
+		bottomLeft = Borders.BottomLeft
+		bottomRight = Borders.BottomRight
+
+		if b.borderTop {
+			for x := b.x + 1; x < b.x+b.width-1; x++ {
+				screen.SetContent(x, b.y, horizontal, nil, border)
+			}
+
+			if b.borderLeft {
+				screen.SetContent(b.x, b.y, topLeft, nil, border)
+			} else {
+				screen.SetContent(b.x, b.y, horizontal, nil, border)
+			}
+
+			if b.borderRight {
+				screen.SetContent(b.x+b.width-1, b.y, topRight, nil, border)
+			} else {
+				screen.SetContent(b.x+b.width-1, b.y, horizontal, nil, border)
+			}
 		}
-		for y := b.y + 1; y < b.y+b.height-1; y++ {
-			screen.SetContent(b.x, y, vertical, nil, border)
-			screen.SetContent(b.x+b.width-1, y, vertical, nil, border)
+
+		if b.borderBottom {
+			for x := b.x + 1; x < b.x+b.width-1; x++ {
+				screen.SetContent(x, b.y+b.height-1, horizontal, nil, border)
+			}
+
+			if b.borderLeft {
+				screen.SetContent(b.x, b.y+b.height-1, bottomLeft, nil, border)
+			} else {
+				screen.SetContent(b.x, b.y+b.height-1, horizontal, nil, border)
+			}
+			if b.borderRight {
+				screen.SetContent(b.x+b.width-1, b.y+b.height-1, bottomRight, nil, border)
+			} else {
+				screen.SetContent(b.x+b.width-1, b.y+b.height-1, horizontal, nil, border)
+			}
 		}
-		screen.SetContent(b.x, b.y, topLeft, nil, border)
-		screen.SetContent(b.x+b.width-1, b.y, topRight, nil, border)
-		screen.SetContent(b.x, b.y+b.height-1, bottomLeft, nil, border)
-		screen.SetContent(b.x+b.width-1, b.y+b.height-1, bottomRight, nil, border)
+
+		if b.borderLeft {
+			for y := b.y + 1; y < b.y+b.height-1; y++ {
+				screen.SetContent(b.x, y, vertical, nil, border)
+			}
+
+			if b.borderTop {
+				screen.SetContent(b.x, b.y, topLeft, nil, border)
+			} else {
+				screen.SetContent(b.x, b.y, vertical, nil, border)
+			}
+
+			if b.borderBottom {
+				screen.SetContent(b.x, b.y+b.height-1, bottomLeft, nil, border)
+			} else {
+				screen.SetContent(b.x, b.y+b.height-1, vertical, nil, border)
+			}
+		}
+
+		if b.borderRight {
+			for y := b.y + 1; y < b.y+b.height-1; y++ {
+				screen.SetContent(b.x+b.width-1, y, vertical, nil, border)
+			}
+
+			if b.borderTop {
+				screen.SetContent(b.x+b.width-1, b.y, topRight, nil, border)
+			} else {
+				screen.SetContent(b.x+b.width-1, b.y, vertical, nil, border)
+			}
+
+			if b.borderBottom {
+				screen.SetContent(b.x+b.width-1, b.y+b.height-1, bottomRight, nil, border)
+			} else {
+				screen.SetContent(b.x+b.width-1, b.y+b.height-1, vertical, nil, border)
+			}
+		}
 
 		// Draw title.
 		if b.title != "" && b.width >= 4 {
@@ -318,16 +448,24 @@ func (b *Box) Draw(screen tcell.Screen) {
 		b.innerHeight += b.innerY
 		b.innerY = 0
 	}
+
+	return true
 }
 
 // Focus is called when this primitive receives focus.
 func (b *Box) Focus(delegate func(p Primitive)) {
 	b.hasFocus = true
+	if b.onFocus != nil {
+		b.onFocus()
+	}
 }
 
 // Blur is called when this primitive loses focus.
 func (b *Box) Blur() {
 	b.hasFocus = false
+	if b.onBlur != nil {
+		b.onBlur()
+	}
 }
 
 // HasFocus returns whether or not this primitive has focus.

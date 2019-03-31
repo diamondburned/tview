@@ -16,7 +16,7 @@ type dropDownOption struct {
 // DropDown implements a selection widget whose options become visible in a
 // drop-down list when activated.
 //
-// See https://github.com/rivo/tview/wiki/DropDown for an example.
+// See https://github.com/diamondburned/tview/wiki/DropDown for an example.
 type DropDown struct {
 	*Box
 
@@ -242,14 +242,17 @@ func (d *DropDown) SetFinishedFunc(handler func(key tcell.Key)) FormItem {
 }
 
 // Draw draws this primitive onto the screen.
-func (d *DropDown) Draw(screen tcell.Screen) {
-	d.Box.Draw(screen)
+func (d *DropDown) Draw(screen tcell.Screen) bool {
+	res := d.Box.Draw(screen)
+	if !res {
+		return false
+	}
 
 	// Prepare.
 	x, y, width, height := d.GetInnerRect()
 	rightLimit := x + width
 	if height < 1 || rightLimit <= x {
-		return
+		return false
 	}
 
 	// Draw label.
@@ -330,6 +333,8 @@ func (d *DropDown) Draw(screen tcell.Screen) {
 		d.list.SetRect(lx, ly, lwidth, lheight)
 		d.list.Draw(screen)
 	}
+
+	return true
 }
 
 // InputHandler returns the handler for this primitive.

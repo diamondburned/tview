@@ -8,7 +8,7 @@ import (
 // for an immediate decision. It needs to have at least one button (added via
 // AddButtons()) or it will never disappear.
 //
-// See https://github.com/rivo/tview/wiki/Modal for an example.
+// See https://github.com/diamondburned/tview/wiki/Modal for an example.
 type Modal struct {
 	*Box
 
@@ -112,7 +112,11 @@ func (m *Modal) HasFocus() bool {
 }
 
 // Draw draws this primitive onto the screen.
-func (m *Modal) Draw(screen tcell.Screen) {
+func (m *Modal) Draw(screen tcell.Screen) bool {
+	if !m.IsVisible() {
+		return false
+	}
+
 	// Calculate the width of this modal.
 	buttonsWidth := 0
 	for _, button := range m.form.buttons {
@@ -143,4 +147,6 @@ func (m *Modal) Draw(screen tcell.Screen) {
 	// Draw the frame.
 	m.frame.SetRect(x, y, width, height)
 	m.frame.Draw(screen)
+
+	return true
 }
