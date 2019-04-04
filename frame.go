@@ -80,6 +80,11 @@ func (f *Frame) SetBorders(top, bottom, header, footer, left, right int) *Frame 
 	return f
 }
 
+// SetPrimitive changes the frame's primitive
+func (f *Frame) SetPrimitive(p Primitive) {
+	f.primitive = p
+}
+
 // Draw draws this primitive onto the screen.
 func (f *Frame) Draw(screen tcell.Screen) bool {
 	res := f.Box.Draw(screen)
