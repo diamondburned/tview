@@ -588,9 +588,23 @@ func (t *TextView) reindexBuffer(width int) {
 	regionID := ""
 	var highlighted bool
 
-	// Go through each line in the buffer.
-	for bufferIndex, str := range t.buffer {
-		colorTagIndices, colorTags, regionIndices, regions, escapeIndices, strippedStr, _ := decomposeString(str, t.dynamicColors, t.regions)
+
+	for bufferIndex := lastIndex.Line; bufferIndex < len(t.buffer); bufferIndex++ {
+		var (
+			originalPos, offset int
+			str                 string
+		)
+		if bufferIndex == lastIndex.Line {
+			// Start from the last index line
+			str = t.buffer[bufferIndex][lastIndex.Pos:]
+			originalPos = lastIndex.Pos
+			// Offset used for the tagEnd-related calculations, since they are
+			// now relative to the last indexed line
+			offset = lastIndex.Pos
+		} else {
+			str = t.buffer[bufferIndex]
+		}
+		colorTagIndices, colorTags, regionIndices, regions, escapeIndices, strippedStr, _ := decomposeString(str, t.dynamicColors, t.regions, false)
 
 		// Split the line if required.
 		var splitLines []string
@@ -843,7 +857,7 @@ func (t *TextView) Draw(screen tcell.Screen) bool {
 		regionID := index.Region
 
 		// Process tags.
-		colorTagIndices, colorTags, regionIndices, regions, escapeIndices, strippedText, _ := decomposeString(text, t.dynamicColors, t.regions)
+		colorTagIndices, colorTags, regionIndices, regions, escapeIndices, strippedText, _ := decomposeString(text, t.dynamicColors, t.regions, false)
 
 		// Calculate the position of the line.
 		var skip, posX int
