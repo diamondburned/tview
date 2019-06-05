@@ -169,6 +169,12 @@ type TextView struct {
 	// An optional function which is called when the user presses one of the
 	// following keys: Escape, Enter, Tab, Backtab.
 	done func(tcell.Key)
+
+	// Mouse selection coordinates
+	startPosX, startPosY int
+	endPosX, endPosY     int
+
+	mouseDown bool
 }
 
 // NewTextView returns a new text view.
@@ -183,6 +189,10 @@ func NewTextView() *TextView {
 		textColor:     Styles.PrimaryTextColor,
 		regions:       false,
 		dynamicColors: false,
+		startPosX:     -1,
+		startPosY:     -1,
+		endPosX:       -1,
+		endPosY:       -1,
 	}
 }
 
@@ -894,6 +904,39 @@ func (t *TextView) Draw(screen tcell.Screen) {
 					highlighted = true
 				}
 			}
+
+			// Highlight mouse selected area
+
+			var (
+				startPosX, startPosY = t.startPosX, t.startPosY
+				endPosX, endPosY     = t.endPosX, t.endPosY
+			)
+
+			if endPosX > startPosX {
+				startPosX, endPosX = endPosX, startPosX
+			}
+
+			if endPosY > startPosY {
+				startPosY, endPosY = endPosY, startPosY
+			}
+
+			// If the selection is > 1 line and the current line is the first line
+			if t.startPosY != t.endPosY {
+				// If the current line is the first line
+				if t.startPosY == y+line && t.startPosX <= x+posX {
+					highlighted = true
+
+					// If the current line is the last line
+				} else if t.endPosY == y+line && t.endPosX >= x+posX {
+					highlighted = true
+				}
+			}
+
+			// If the line is inbetween the selection, highlight the whole line
+			if t.startPosY < y+line && y+line < t.endPosY {
+				highlighted = true
+			}
+
 			if highlighted {
 				fg, bg, _ := style.Decompose()
 				if bg == tcell.ColorDefault {
@@ -1002,4 +1045,40 @@ func (t *TextView) InputHandler() func(event *tcell.EventKey, setFocus func(p Pr
 			t.lineOffset -= t.pageSize
 		}
 	})
+}
+
+// MouseHandler returns a mouse handler
+func (t *TextView) MouseHandler() func(*tcell.EventMouse) bool {
+	return func(ev *tcell.EventMouse) (b bool) {
+		if !t.mouseDown && ev.Buttons() == tcell.Button1 {
+			t.startPosX, t.startPosY = ev.Position()
+
+			t.mouseDown = true
+		}
+
+		if t.mouseDown {
+			t.endPosX, t.endPosY = ev.Position()
+
+			if ev.Buttons() == 0 {
+				t.mouseDown = false
+
+				if t.startPosX == t.endPosX && t.startPosY == t.endPosY {
+					t.startPosX, t.startPosY = -1, -1
+					t.endPosX, t.endPosY = -1, -1
+
+					return false
+				}
+
+				fmt.Fprintf(t,
+					"(X1, Y1): (%d, %d); (X2, Y2): (%d, %d)\n",
+					t.startPosX, t.startPosY,
+					t.endPosX, t.endPosY,
+				)
+			}
+
+			return true
+		}
+
+		return false
+	}
 }
