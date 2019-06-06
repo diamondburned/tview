@@ -16,6 +16,7 @@ func main() {
 		SetChangedFunc(func() {
 			app.Draw()
 		})
+
 	textView.SetText(corporate)
 
 	if err := app.SetRoot(textView, true).SetFocus(textView).Run(); err != nil {

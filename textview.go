@@ -132,6 +132,9 @@ type TextView struct {
 	// The number of characters to be skipped on each line (not in wrap mode).
 	columnOffset int
 
+	// Step to increment/decrement for each scroll
+	scrollStep int
+
 	// The height of the content the last time the text view was drawn.
 	pageSize int
 
@@ -284,6 +287,21 @@ func (t *TextView) GetText(stripTags bool) string {
 	return text
 }
 
+// GetSelectedText returns the selected text
+func (t *TextView) GetSelectedText() string {
+	var s strings.Builder
+
+	for y, l := range strings.Split(t.GetText(true), "\n") {
+		for x, r := range l {
+			if t.posIsInSelectionRange(x, y) {
+				s.WriteRune(r)
+			}
+		}
+	}
+
+	return s.String()
+}
+
 // SetDynamicColors sets the flag that allows the text color to be changed
 // dynamically. See class description for details.
 func (t *TextView) SetDynamicColors(dynamic bool) *TextView {
@@ -329,6 +347,13 @@ func (t *TextView) SetChangedFunc(handler func()) *TextView {
 // handler.
 func (t *TextView) SetDoneFunc(handler func(key tcell.Key)) *TextView {
 	t.done = handler
+	return t
+}
+
+// SetScrollStep sets the scroll step for both vertical and horizontal
+// scrolling.
+func (t *TextView) SetScrollStep(s int) *TextView {
+	t.scrollStep = s
 	return t
 }
 
@@ -746,6 +771,38 @@ func (t *TextView) reindexBuffer(width int) {
 	}
 }
 
+func (t *TextView) posIsInSelectionRange(x, y int) (highlighted bool) {
+	var (
+		startPosX, startPosY = t.startPosX, t.startPosY
+		endPosX, endPosY     = t.endPosX, t.endPosY
+	)
+
+	if startPosY > endPosY {
+		startPosY, endPosY = endPosY, startPosY
+		startPosX, endPosX = endPosX, startPosX
+	} else if startPosX > endPosX {
+		startPosX, endPosX = endPosX, startPosX
+	}
+
+	if y >= startPosY && y <= endPosY {
+		if y == startPosY {
+			if x >= startPosX {
+				if endPosY != startPosY || x <= endPosX {
+					highlighted = true
+				}
+			}
+		} else if y == endPosY {
+			if x < endPosX {
+				highlighted = true
+			}
+		} else {
+			highlighted = true
+		}
+	}
+
+	return
+}
+
 // Draw draws this primitive onto the screen.
 func (t *TextView) Draw(screen tcell.Screen) {
 	t.Lock()
@@ -906,34 +963,7 @@ func (t *TextView) Draw(screen tcell.Screen) {
 			}
 
 			// Highlight mouse selected area
-
-			var (
-				startPosX, startPosY = t.startPosX, t.startPosY
-				endPosX, endPosY     = t.endPosX, t.endPosY
-			)
-
-			if endPosX > startPosX {
-				startPosX, endPosX = endPosX, startPosX
-			}
-
-			if endPosY > startPosY {
-				startPosY, endPosY = endPosY, startPosY
-			}
-
-			// If the selection is > 1 line and the current line is the first line
-			if t.startPosY != t.endPosY {
-				// If the current line is the first line
-				if t.startPosY == y+line && t.startPosX <= x+posX {
-					highlighted = true
-
-					// If the current line is the last line
-				} else if t.endPosY == y+line && t.endPosX >= x+posX {
-					highlighted = true
-				}
-			}
-
-			// If the line is inbetween the selection, highlight the whole line
-			if t.startPosY < y+line && y+line < t.endPosY {
+			if t.posIsInSelectionRange(x+posX, y+line) {
 				highlighted = true
 			}
 
@@ -1013,14 +1043,14 @@ func (t *TextView) InputHandler() func(event *tcell.EventKey, setFocus func(p Pr
 				t.trackEnd = true
 				t.columnOffset = 0
 			case 'j': // Down.
-				t.lineOffset++
+				t.lineOffset += t.scrollStep
 			case 'k': // Up.
 				t.trackEnd = false
-				t.lineOffset--
+				t.lineOffset -= t.scrollStep
 			case 'h': // Left.
-				t.columnOffset--
+				t.columnOffset -= t.scrollStep
 			case 'l': // Right.
-				t.columnOffset++
+				t.columnOffset += t.scrollStep
 			}
 		case tcell.KeyHome:
 			t.trackEnd = false
@@ -1031,13 +1061,13 @@ func (t *TextView) InputHandler() func(event *tcell.EventKey, setFocus func(p Pr
 			t.columnOffset = 0
 		case tcell.KeyUp:
 			t.trackEnd = false
-			t.lineOffset--
+			t.lineOffset -= t.scrollStep
 		case tcell.KeyDown:
-			t.lineOffset++
+			t.lineOffset += t.scrollStep
 		case tcell.KeyLeft:
-			t.columnOffset--
+			t.columnOffset -= t.scrollStep
 		case tcell.KeyRight:
-			t.columnOffset++
+			t.columnOffset = t.scrollStep
 		case tcell.KeyPgDn, tcell.KeyCtrlF:
 			t.lineOffset += t.pageSize
 		case tcell.KeyPgUp, tcell.KeyCtrlB:
@@ -1066,14 +1096,10 @@ func (t *TextView) MouseHandler() func(*tcell.EventMouse) bool {
 					t.startPosX, t.startPosY = -1, -1
 					t.endPosX, t.endPosY = -1, -1
 
-					return false
+					return true
 				}
 
-				fmt.Fprintf(t,
-					"(X1, Y1): (%d, %d); (X2, Y2): (%d, %d)\n",
-					t.startPosX, t.startPosY,
-					t.endPosX, t.endPosY,
-				)
+				fmt.Fprintln(t, t.GetSelectedText())
 			}
 
 			return true
