@@ -772,6 +772,10 @@ func (t *TextView) reindexBuffer(width int) {
 }
 
 func (t *TextView) posIsInSelectionRange(x, y int) (highlighted bool) {
+	if t.startPosX < 0 && t.endPosY < 0 {
+		return
+	}
+
 	var (
 		startPosX, startPosY = t.startPosX, t.startPosY
 		endPosX, endPosY     = t.endPosX, t.endPosY
