@@ -294,7 +294,8 @@ func (d *DropDown) Draw(screen tcell.Screen) {
 		// Show the prefix.
 		Print(screen, d.prefix, x, y, fieldWidth, AlignLeft, d.prefixTextColor)
 		prefixWidth := stringWidth(d.prefix)
-		listItemText := d.options[d.list.GetCurrentItem()].Text
+		i, _ := d.list.GetCurrentItem()
+		listItemText := d.options[i].Text
 		if prefixWidth < fieldWidth && len(d.prefix) < len(listItemText) {
 			Print(screen, listItemText[len(d.prefix):], x+prefixWidth, y, fieldWidth-prefixWidth, AlignLeft, d.fieldTextColor)
 		}
