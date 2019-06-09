@@ -320,13 +320,10 @@ func Suspend(f func() error) bool {
 	return true
 }
 
-// QueueApplication takes in a function and pass in the application. This is intended
+// ExecApplication takes in a function and pass in the application. This is intended
 // for widgets/primitives to use to trigger a draw by itself.
-func QueueApplication(f func(*Application) bool) {
-	application.Lock()
-
+func ExecApplication(f func(*Application) bool) {
 	b := f(application)
-	application.Unlock()
 
 	if b {
 		application.draw()
