@@ -127,7 +127,7 @@ func Run() (err error) {
 			application.RUnlock()
 			if screen == nil {
 				// We have no screen. Let's stop.
-				application.QueueEvent(nil)
+				QueueEvent(nil)
 				break
 			}
 
@@ -135,7 +135,7 @@ func Run() (err error) {
 			event := screen.PollEvent()
 			if event != nil {
 				// Regular event. Queue.
-				application.QueueEvent(event)
+				QueueEvent(event)
 				continue
 			}
 
@@ -143,7 +143,7 @@ func Run() (err error) {
 			screen = <-application.screenReplacement
 			if screen == nil {
 				// No new screen. We're done.
-				application.QueueEvent(nil)
+				QueueEvent(nil)
 				return
 			}
 
@@ -262,7 +262,7 @@ func Stop() {
 // function of the application's root primitive and then syncs the screen
 // buffer.
 func Draw() {
-	application.QueueUpdate(func() {
+	QueueUpdate(func() {
 		application.draw()
 	})
 }
