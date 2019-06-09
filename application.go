@@ -7,7 +7,7 @@ import (
 )
 
 // QueueSize is the size of the event/update/redraw channels.
-var QueueSize = 100
+var QueueSize = 0
 
 // application exposes the whole application as a singleton. This variable will be filled
 // when Newapplication() is called.
@@ -323,11 +323,9 @@ func Suspend(f func() error) bool {
 // ExecApplication takes in a function and pass in the application. This is intended
 // for widgets/primitives to use to trigger a draw by itself.
 func ExecApplication(f func(*Application) bool) {
-	QueueUpdate(func() {
-		if f(application) {
-			application.draw()
-		}
-	})
+	if f(application) {
+		application.draw()
+	}
 }
 
 // QueueUpdate is used to synchronize access to primitives from non-main
