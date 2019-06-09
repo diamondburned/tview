@@ -330,6 +330,35 @@ func ExecApplication(f func(*Application) bool) {
 	}
 }
 
+// QueueUpdate is used to synchronize access to primitives from non-main
+// goroutines. The provided function will be executed as part of the event loop
+// and thus will not cause race conditions with other such update functions or
+// the Draw() function.
+//
+// Note that Draw() is not implicitly called after the execution of f as that
+// may not be desirable. You can call Draw() from f if the screen should be
+// refreshed after each update. Alternatively, use QueueUpdateDraw() to follow
+// up with an immediate refresh of the screen.
+func QueueUpdate(f func()) {
+	application.updates <- f
+}
+
+// QueueUpdateDraw works like QueueUpdate() except it refreshes the screen
+// immediately after executing f.
+func QueueUpdateDraw(f func()) {
+	QueueUpdate(func() {
+		f()
+		application.draw()
+	})
+}
+
+// QueueEvent sends an event to the Application event loop.
+//
+// It is not recommended for event to be nil.
+func QueueEvent(event tcell.Event) {
+	application.events <- event
+}
+
 // SetInputCapture sets a function which captures all key events before they are
 // forwarded to the key event handler of the primitive which currently has
 // focus. This function can then choose to forward that key event (or a
@@ -519,38 +548,6 @@ func (a *Application) GetFocus() Primitive {
 	a.RLock()
 	defer a.RUnlock()
 	return a.focus
-}
-
-// QueueUpdate is used to synchronize access to primitives from non-main
-// goroutines. The provided function will be executed as part of the event loop
-// and thus will not cause race conditions with other such update functions or
-// the Draw() function.
-//
-// Note that Draw() is not implicitly called after the execution of f as that
-// may not be desirable. You can call Draw() from f if the screen should be
-// refreshed after each update. Alternatively, use QueueUpdateDraw() to follow
-// up with an immediate refresh of the screen.
-func (a *Application) QueueUpdate(f func()) *Application {
-	a.updates <- f
-	return a
-}
-
-// QueueUpdateDraw works like QueueUpdate() except it refreshes the screen
-// immediately after executing f.
-func (a *Application) QueueUpdateDraw(f func()) *Application {
-	a.QueueUpdate(func() {
-		f()
-		a.draw()
-	})
-	return a
-}
-
-// QueueEvent sends an event to the Application event loop.
-//
-// It is not recommended for event to be nil.
-func (a *Application) QueueEvent(event tcell.Event) *Application {
-	a.events <- event
-	return a
 }
 
 // GetComponentAt returns the highest level component at the given coordinates
