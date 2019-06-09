@@ -7,7 +7,7 @@ import (
 )
 
 // QueueSize is the size of the event/update/redraw channels.
-var QueueSize = 0
+var QueueSize = 100
 
 // application exposes the whole application as a singleton. This variable will be filled
 // when Newapplication() is called.
