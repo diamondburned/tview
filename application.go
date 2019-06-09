@@ -507,6 +507,15 @@ func (a *Application) SetRoot(root Primitive, fullscreen bool) *Application {
 	return a
 }
 
+// GetRoot returns the current root of the application.
+func (a *Application) GetRoot() Primitive {
+	a.RLock()
+	root := a.root
+	a.RUnlock()
+
+	return root
+}
+
 // ResizeToFullScreen resizes the given primitive such that it fills the entire
 // screen.
 func (a *Application) ResizeToFullScreen(p Primitive) *Application {
