@@ -323,11 +323,11 @@ func Suspend(f func() error) bool {
 // ExecApplication takes in a function and pass in the application. This is intended
 // for widgets/primitives to use to trigger a draw by itself.
 func ExecApplication(f func(*Application) bool) {
-	b := f(application)
-
-	if b {
-		application.draw()
-	}
+	QueueUpdate(func() {
+		if f(application) {
+			application.draw()
+		}
+	})
 }
 
 // QueueUpdate is used to synchronize access to primitives from non-main
