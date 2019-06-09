@@ -9,6 +9,10 @@ import (
 // QueueSize is the size of the event/update/redraw channels.
 var QueueSize = 100
 
+// application exposes the whole application as a singleton. This variable will be filled
+// when Newapplication() is called.
+var application *Application
+
 // Application represents the top node of an application.
 //
 // It is not strictly required to use this class as none of the other classes
@@ -64,12 +68,268 @@ type Application struct {
 	screenReplacement chan tcell.Screen
 }
 
-// NewApplication creates and returns a new application.
-func NewApplication() *Application {
-	return &Application{
-		events:            make(chan tcell.Event, QueueSize),
-		updates:           make(chan func(), QueueSize),
-		screenReplacement: make(chan tcell.Screen, 1),
+// Initialize creates a new application.
+func Initialize() *Application {
+	if application != nil {
+		application = &Application{
+			events:            make(chan tcell.Event, QueueSize),
+			updates:           make(chan func(), QueueSize),
+			screenReplacement: make(chan tcell.Screen, 1),
+		}
+	}
+
+	return application
+}
+
+// Run starts the application and thus the event loop. This function returns
+// when Stop() was called.
+func Run() (err error) {
+	application.Lock()
+
+	// Make application.Screen if there is none yet.
+	if application.Screen == nil {
+		application.Screen, err = tcell.NewScreen()
+		if err != nil {
+			application.Unlock()
+			return err
+		}
+		if err = application.Screen.Init(); err != nil {
+			application.Unlock()
+			return err
+		}
+
+		// Enable mouse
+		application.Screen.EnableMouse()
+	}
+
+	// We catch panics to clean up because they mess up the terminal.
+	defer func() {
+		if p := recover(); p != nil {
+			if application.Screen != nil {
+				application.Screen.Fini()
+			}
+			panic(p)
+		}
+	}()
+
+	// Draw the screen for the first time.
+	application.Unlock()
+	application.draw()
+
+	// Separate loop to wait for screen events.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			application.RLock()
+			screen := application.Screen
+			application.RUnlock()
+			if screen == nil {
+				// We have no screen. Let's stop.
+				application.QueueEvent(nil)
+				break
+			}
+
+			// Wait for next event and queue it.
+			event := screen.PollEvent()
+			if event != nil {
+				// Regular event. Queue.
+				application.QueueEvent(event)
+				continue
+			}
+
+			// A screen was finalized (event is nil). Wait for a new scren.
+			screen = <-application.screenReplacement
+			if screen == nil {
+				// No new screen. We're done.
+				application.QueueEvent(nil)
+				return
+			}
+
+			// We have a new screen. Keep going.
+			application.Lock()
+			application.Screen = screen
+			application.Unlock()
+
+			// Initialize and draw this screen.
+			if err := screen.Init(); err != nil {
+				panic(err)
+			}
+			application.draw()
+		}
+	}()
+
+	// Start event loop.
+EventLoop:
+	for {
+		select {
+		case event := <-application.events:
+			if event == nil {
+				break EventLoop
+			}
+
+			switch event := event.(type) {
+			case *tcell.EventKey:
+				application.RLock()
+				p := application.focus
+				inputCapture := application.inputCapture
+				application.RUnlock()
+
+				// Intercept keys.
+				if inputCapture != nil {
+					if event = inputCapture(event); event == nil {
+						application.draw()
+						continue // Don't forward event.
+					}
+				}
+
+				// Ctrl-C closes the application.
+				if event.Key() == tcell.KeyCtrlC {
+					Stop()
+				}
+
+				// Pass other key events to the currently focused primitive.
+				if p != nil {
+					if handler := p.InputHandler(); handler != nil {
+						handler(event, func(p Primitive) {
+							application.SetFocus(p)
+						})
+
+						application.draw()
+					}
+				}
+
+			case *tcell.EventMouse:
+				application.RLock()
+				atXY := application.GetComponentAt(event.Position())
+				application.RUnlock()
+
+				if atXY == nil {
+					continue
+				}
+
+				mouseSupport, ok := (*atXY).(MouseSupport)
+				if !ok {
+					continue
+				}
+
+				if handler := mouseSupport.MouseHandler(); handler != nil && handler(event) {
+					application.draw()
+				}
+
+			case *tcell.EventResize:
+				application.RLock()
+				screen := application.Screen
+				application.RUnlock()
+
+				if screen == nil {
+					continue
+				}
+
+				screen.Clear()
+				application.draw()
+			}
+
+		// If we have updates, now is the time to execute them.
+		case updater := <-application.updates:
+			updater()
+		}
+	}
+
+	// Wait for the event loop to finish.
+	wg.Wait()
+	application.Screen = nil
+
+	return nil
+}
+
+// Stop stops the application, causing Run() to return.
+func Stop() {
+	application.Lock()
+	defer application.Unlock()
+
+	if application.Screen == nil {
+		return
+	}
+
+	application.Screen.Fini()
+	application.Screen = nil
+	application.screenReplacement <- nil
+}
+
+// Draw refreshes the screen (during the next update cycle). It calls the Draw()
+// function of the application's root primitive and then syncs the screen
+// buffer.
+func Draw() {
+	application.QueueUpdate(func() {
+		application.draw()
+	})
+}
+
+// ForceDraw refreshes the screen immediately. Use this function with caution as
+// it may lead to race conditions with updates to primitives in other
+// goroutines. It is always preferrable to use Draw() instead. Never call this
+// function from a goroutine.
+//
+// It is safe to call this function during queued updates and direct event
+// handling.
+func ForceDraw() {
+	application.draw()
+}
+
+// Suspend temporarily suspends the application by exiting terminal UI mode and
+// invoking the provided function "f". When "f" returns nil, terminal UI mode is
+// entered again and the application resumes. If "f" returns an error, the
+// application safely panics.
+//
+// A return value of true indicates that the application was suspended and "f"
+// was called. If false is returned, the application was already suspended,
+// terminal UI mode was not exited, and "f" was not called.
+func Suspend(f func() error) bool {
+	application.RLock()
+	screen := application.Screen
+	application.RUnlock()
+
+	if screen == nil {
+		return false // Screen has not yet been initialized.
+	}
+
+	// Enter suspended mode.
+	screen.Fini()
+
+	// Wait for "f" to return.
+	if err := f(); err != nil {
+		panic(err)
+	}
+
+	// Make a new screen.
+	s, err := tcell.NewScreen()
+	if err != nil {
+		panic(err)
+	}
+
+	application.Lock()
+	application.Screen = s
+	application.Unlock()
+
+	// One key event will get lost, see https://github.com/rivo/tcell/issues/194
+	application.screenReplacement <- screen
+
+	// Continue application loop.
+	return true
+}
+
+// QueueApplication takes in a function and pass in the application. This is intended
+// for widgets/primitives to use to trigger a draw by itself.
+func QueueApplication(f func(*Application) bool) {
+	application.Lock()
+
+	b := f(application)
+	application.Unlock()
+
+	if b {
+		application.draw()
 	}
 }
 
@@ -119,235 +379,6 @@ func (a *Application) SetScreen(screen tcell.Screen) *Application {
 	a.screenReplacement <- screen
 
 	return a
-}
-
-// Run starts the application and thus the event loop. This function returns
-// when Stop() was called.
-func (a *Application) Run() error {
-	var err error
-	a.Lock()
-
-	// Make a.Screen if there is none yet.
-	if a.Screen == nil {
-		a.Screen, err = tcell.NewScreen()
-		if err != nil {
-			a.Unlock()
-			return err
-		}
-		if err = a.Screen.Init(); err != nil {
-			a.Unlock()
-			return err
-		}
-		a.Screen.EnableMouse()
-	}
-
-	// We catch panics to clean up because they mess up the terminal.
-	defer func() {
-		if p := recover(); p != nil {
-			if a.Screen != nil {
-				a.Screen.Fini()
-			}
-			panic(p)
-		}
-	}()
-
-	// Draw the screen for the first time.
-	a.Unlock()
-	a.draw()
-
-	// Separate loop to wait for screen events.
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			a.RLock()
-			screen := a.Screen
-			a.RUnlock()
-			if screen == nil {
-				// We have no screen. Let's stop.
-				a.QueueEvent(nil)
-				break
-			}
-
-			// Wait for next event and queue it.
-			event := screen.PollEvent()
-			if event != nil {
-				// Regular event. Queue.
-				a.QueueEvent(event)
-				continue
-			}
-
-			// A screen was finalized (event is nil). Wait for a new scren.
-			screen = <-a.screenReplacement
-			if screen == nil {
-				// No new screen. We're done.
-				a.QueueEvent(nil)
-				return
-			}
-
-			// We have a new screen. Keep going.
-			a.Lock()
-			a.Screen = screen
-			a.Unlock()
-
-			// Initialize and draw this screen.
-			if err := screen.Init(); err != nil {
-				panic(err)
-			}
-			a.draw()
-		}
-	}()
-
-	// Start event loop.
-EventLoop:
-	for {
-		select {
-		case event := <-a.events:
-			if event == nil {
-				break EventLoop
-			}
-
-			switch event := event.(type) {
-			case *tcell.EventKey:
-				a.RLock()
-				p := a.focus
-				inputCapture := a.inputCapture
-				a.RUnlock()
-
-				// Intercept keys.
-				if inputCapture != nil {
-					event = inputCapture(event)
-					if event == nil {
-						a.draw()
-						continue // Don't forward event.
-					}
-				}
-
-				// Ctrl-C closes the application.
-				if event.Key() == tcell.KeyCtrlC {
-					a.Stop()
-				}
-
-				// Pass other key events to the currently focused primitive.
-				if p != nil {
-					if handler := p.InputHandler(); handler != nil {
-						handler(event, func(p Primitive) {
-							a.SetFocus(p)
-						})
-						a.draw()
-					}
-				}
-
-			case *tcell.EventMouse:
-				a.RLock()
-				atXY := a.GetComponentAt(event.Position())
-				a.RUnlock()
-
-				if atXY == nil {
-					continue
-				}
-
-				mouseSupport, ok := (*atXY).(MouseSupport)
-				if !ok {
-					continue
-				}
-
-				handler := mouseSupport.MouseHandler()
-				if handler != nil && handler(event) {
-					a.draw()
-				}
-
-			case *tcell.EventResize:
-				a.RLock()
-				screen := a.Screen
-				a.RUnlock()
-				if screen == nil {
-					continue
-				}
-				screen.Clear()
-				a.draw()
-			}
-
-		// If we have updates, now is the time to execute them.
-		case updater := <-a.updates:
-			updater()
-		}
-	}
-
-	// Wait for the event loop to finish.
-	wg.Wait()
-	a.Screen = nil
-
-	return nil
-}
-
-// Stop stops the application, causing Run() to return.
-func (a *Application) Stop() {
-	a.Lock()
-	defer a.Unlock()
-	screen := a.Screen
-	if screen == nil {
-		return
-	}
-	a.Screen = nil
-	screen.Fini()
-	a.screenReplacement <- nil
-}
-
-// Suspend temporarily suspends the application by exiting terminal UI mode and
-// invoking the provided function "f". When "f" returns, terminal UI mode is
-// entered again and the application resumes.
-//
-// A return value of true indicates that the application was suspended and "f"
-// was called. If false is returned, the application was already suspended,
-// terminal UI mode was not exited, and "f" was not called.
-func (a *Application) Suspend(f func()) bool {
-	a.RLock()
-	screen := a.Screen
-	a.RUnlock()
-	if screen == nil {
-		return false // Screen has not yet been initialized.
-	}
-
-	// Enter suspended mode.
-	screen.Fini()
-
-	// Wait for "f" to return.
-	f()
-
-	// Make a new screen.
-	var err error
-	screen, err = tcell.NewScreen()
-	if err != nil {
-		panic(err)
-	}
-	a.screenReplacement <- screen
-	// One key event will get lost, see https://github.com/diamondburned/tcell/issues/194
-
-	// Continue application loop.
-	return true
-}
-
-// Draw refreshes the screen (during the next update cycle). It calls the Draw()
-// function of the application's root primitive and then syncs the screen
-// buffer.
-func (a *Application) Draw() *Application {
-	a.QueueUpdate(func() {
-		a.draw()
-	})
-	return a
-}
-
-// ForceDraw refreshes the screen immediately. Use this function with caution as
-// it may lead to race conditions with updates to primitives in other
-// goroutines. It is always preferrable to use Draw() instead. Never call this
-// function from a goroutine.
-//
-// It is safe to call this function during queued updates and direct event
-// handling.
-func (a *Application) ForceDraw() *Application {
-	return a.draw()
 }
 
 // draw actually does what Draw() promises to do.
