@@ -70,7 +70,7 @@ type Application struct {
 
 // Initialize creates a new application.
 func Initialize() *Application {
-	if application != nil {
+	if application == nil {
 		application = &Application{
 			events:            make(chan tcell.Event, QueueSize),
 			updates:           make(chan func(), QueueSize),
