@@ -177,7 +177,7 @@ func overlayStyle(background tcell.Color, defaultStyle tcell.Style, fgColor, bgC
 func decomposeString(text string, findColors, findRegions bool) (colorIndices [][]int, colors [][]string, regionIndices [][]int, regions [][]string, escapeIndices [][]int, stripped string, width int) {
 	// Shortcut for the trivial case.
 	if !findColors && !findRegions {
-		return nil, nil, nil, nil, nil, text, stringWidth(text)
+		return nil, nil, nil, nil, nil, text, runewidth.StringWidth(text)
 	}
 
 	// Get positions of any tags.
@@ -228,7 +228,7 @@ func decomposeString(text string, findColors, findRegions bool) (colorIndices []
 	stripped = string(escapePattern.ReplaceAll(buf, []byte("[$1$2]")))
 
 	// Get the width of the stripped string.
-	width = stringWidth(stripped)
+	width = runewidth.StringWidth(stripped)
 
 	return
 }
@@ -415,29 +415,11 @@ func PrintSimple(screen tcell.Screen, text string, x, y int) {
 	Print(screen, text, x, y, math.MaxInt32, AlignLeft, Styles.PrimaryTextColor)
 }
 
-// TaggedStringWidth returns the width of the given string needed to print it on
+// StringWidth returns the width of the given string needed to print it on
 // screen. The text may contain color tags which are not counted.
-func TaggedStringWidth(text string) int {
+func StringWidth(text string) int {
 	_, _, _, _, _, _, width := decomposeString(text, true, false)
 	return width
-}
-
-// stringWidth returns the number of horizontal cells needed to print the given
-// text. It splits the text into its grapheme clusters, calculates each
-// cluster's width, and adds them up to a total.
-func stringWidth(text string) (width int) {
-	g := uniseg.NewGraphemes(text)
-	for g.Next() {
-		var chWidth int
-		for _, r := range g.Runes() {
-			chWidth = runewidth.RuneWidth(r)
-			if chWidth > 0 {
-				break // Our best guess at this point is to use the width of the first non-zero-width rune.
-			}
-		}
-		width += chWidth
-	}
-	return
 }
 
 // WordWrap splits a text such that each resulting line does not exceed the
