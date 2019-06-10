@@ -5,10 +5,10 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"unicode"
 
 	"github.com/diamondburned/tcell"
 	runewidth "github.com/mattn/go-runewidth"
-	"github.com/rivo/uniseg"
 )
 
 // Text alignment within a box.
@@ -552,24 +552,51 @@ func Escape(text string) string {
 // returns true. This function returns true if the iteration was stopped before
 // the last character.
 func iterateString(text string, callback func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool) bool {
-	var screenPos int
+	var (
+		runes               []rune
+		lastZeroWidthJoiner bool
+		startIndex          int
+		startPos            int
+		pos                 int
+	)
 
-	gr := uniseg.NewGraphemes(text)
-	for gr.Next() {
-		r := gr.Runes()
-		from, to := gr.Positions()
-		width := stringWidth(gr.Str())
+	// Helper function which invokes the callback.
+	flush := func(index int) bool {
 		var comb []rune
-		if len(r) > 1 {
-			comb = r[1:]
+		if len(runes) > 1 {
+			comb = runes[1:]
 		}
+		return callback(runes[0], comb, startIndex, index-startIndex, startPos, pos-startPos)
+	}
 
-		//		panic(fmt.Sprintf(`from=%d to=%d screenPos=%d width=%d`, from, to, screenPos, width))
-		if callback(r[0], comb, from, to-from, screenPos, width) {
-			return true
+	for index, r := range text {
+		if unicode.In(r, unicode.M) || r == '\u200d' {
+			lastZeroWidthJoiner = r == '\u200d'
+		} else {
+			// We have a rune that's not a modifier. It could be the beginning of a
+			// new character.
+			if !lastZeroWidthJoiner {
+				if len(runes) > 0 {
+					// It is. Invoke callback.
+					if flush(index) {
+						return true // We're done.
+					}
+					// Reset rune store.
+					runes = runes[:0]
+					startIndex = index
+					startPos = pos
+				}
+				pos += runewidth.RuneWidth(r)
+			} else {
+				lastZeroWidthJoiner = false
+			}
 		}
+		runes = append(runes, r)
+	}
 
-		screenPos += width
+	// Flush any remaining runes.
+	if len(runes) > 0 {
+		flush(len(text))
 	}
 
 	return false
@@ -584,37 +611,50 @@ func iterateString(text string, callback func(main rune, comb []rune, textPos, t
 // screen width of it. The iteration stops if the callback returns true. This
 // function returns true if the iteration was stopped before the last character.
 func iterateStringReverse(text string, callback func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool) bool {
-	type cluster struct {
-		main                                       rune
-		comb                                       []rune
-		textPos, textWidth, screenPos, screenWidth int
+	type runePos struct {
+		r     rune
+		pos   int  // The byte position of the rune in the original string.
+		width int  // The screen width of the rune.
+		mod   bool // Modifier or zero-width-joiner.
 	}
 
-	// Create the grapheme clusters.
-	var clusters []cluster
-	iterateString(text, func(main rune, comb []rune, textPos int, textWidth int, screenPos int, screenWidth int) bool {
-		clusters = append(clusters, cluster{
-			main:        main,
-			comb:        comb,
-			textPos:     textPos,
-			textWidth:   textWidth,
-			screenPos:   screenPos,
-			screenWidth: screenWidth,
-		})
-		return false
-	})
+	// We use the following:
+	// len(text) >= number of runes in text.
 
-	// Iterate in reverse.
-	for index := len(clusters) - 1; index >= 0; index-- {
-		if callback(
-			clusters[index].main,
-			clusters[index].comb,
-			clusters[index].textPos,
-			clusters[index].textWidth,
-			clusters[index].screenPos,
-			clusters[index].screenWidth,
-		) {
-			return true
+	// Put all runes into a runePos slice in reverse.
+	runesReverse := make([]runePos, len(text))
+	index := len(text) - 1
+	for pos, ch := range text {
+		runesReverse[index].r = ch
+		runesReverse[index].pos = pos
+		runesReverse[index].width = runewidth.RuneWidth(ch)
+		runesReverse[index].mod = unicode.In(ch, unicode.Lm, unicode.M) || ch == '\u200d'
+		index--
+	}
+	runesReverse = runesReverse[index+1:]
+
+	// Parse reverse runes.
+	var screenWidth int
+	buffer := make([]rune, len(text)) // We fill this up from the back so it's forward again.
+	bufferPos := len(text)
+	stringWidth := runewidth.StringWidth(text)
+	for index, r := range runesReverse {
+		// Put this rune into the buffer.
+		bufferPos--
+		buffer[bufferPos] = r.r
+
+		// Do we need to flush the buffer?
+		if r.pos == 0 || !r.mod && runesReverse[index+1].r != '\u200d' {
+			// Yes, invoke callback.
+			var comb []rune
+			if len(text)-bufferPos > 1 {
+				comb = buffer[bufferPos+1:]
+			}
+			if callback(r.r, comb, r.pos, len(text)-r.pos, stringWidth-screenWidth, r.width) {
+				return true
+			}
+			screenWidth += r.width
+			bufferPos = len(text)
 		}
 	}
 
