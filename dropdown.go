@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/diamondburned/tcell"
+	runewidth "github.com/mattn/go-runewidth"
 )
 
 // dropDownOption is one option that can be selected in a drop-down primitive.
@@ -181,7 +182,7 @@ func (d *DropDown) GetFieldWidth() int {
 	}
 	fieldWidth := 0
 	for _, option := range d.options {
-		width := TaggedStringWidth(option.Text)
+		width := StringWidth(option.Text)
 		if width > fieldWidth {
 			fieldWidth = width
 		}
@@ -267,7 +268,7 @@ func (d *DropDown) Draw(screen tcell.Screen) {
 	// What's the longest option text?
 	maxWidth := 0
 	for _, option := range d.options {
-		strWidth := TaggedStringWidth(option.Text)
+		strWidth := StringWidth(option.Text)
 		if strWidth > maxWidth {
 			maxWidth = strWidth
 		}
@@ -293,9 +294,9 @@ func (d *DropDown) Draw(screen tcell.Screen) {
 	if d.open && len(d.prefix) > 0 {
 		// Show the prefix.
 		Print(screen, d.prefix, x, y, fieldWidth, AlignLeft, d.prefixTextColor)
-		prefixWidth := stringWidth(d.prefix)
-		i, _ := d.list.GetCurrentItem()
-		listItemText := d.options[i].Text
+		prefixWidth := runewidth.StringWidth(d.prefix)
+		x, _ := d.list.GetCurrentItem()
+		listItemText := d.options[x].Text
 		if prefixWidth < fieldWidth && len(d.prefix) < len(listItemText) {
 			Print(screen, listItemText[len(d.prefix):], x+prefixWidth, y, fieldWidth-prefixWidth, AlignLeft, d.fieldTextColor)
 		}

@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/diamondburned/tcell"
+	runewidth "github.com/mattn/go-runewidth"
 )
 
 // InputField is a one-line box (three lines if there is a title) where the
@@ -280,7 +281,8 @@ func (i *InputField) Draw(screen tcell.Screen) {
 		if i.maskCharacter > 0 {
 			text = strings.Repeat(string(i.maskCharacter), utf8.RuneCountInString(i.text))
 		}
-		if fieldWidth >= stringWidth(text) {
+		stringWidth := runewidth.StringWidth(text)
+		if fieldWidth >= stringWidth {
 			// We have enough space for the full text.
 			Print(screen, Escape(text), x, y, fieldWidth, AlignLeft, i.fieldTextColor)
 			i.offset = 0
@@ -302,7 +304,7 @@ func (i *InputField) Draw(screen tcell.Screen) {
 			var shiftLeft int
 			if i.offset > i.cursorPos {
 				i.offset = i.cursorPos
-			} else if subWidth := stringWidth(text[i.offset:i.cursorPos]); subWidth > fieldWidth-1 {
+			} else if subWidth := runewidth.StringWidth(text[i.offset:i.cursorPos]); subWidth > fieldWidth-1 {
 				shiftLeft = subWidth - fieldWidth + 1
 			}
 			currentOffset := i.offset
