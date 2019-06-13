@@ -744,7 +744,7 @@ func (t *TreeView) MouseHandler() func(*tcell.EventMouse) bool {
 			t.SetCurrentNode(t.visibleNodes[n])
 
 			if ev.When().Sub(t.lastClickTime) <= DoubleClickDuration || t.singleClick {
-				if t.currentNode != nil && t.lastNode == t.currentNode {
+				if t.currentNode != nil && t.lastNode != t.currentNode {
 					if t.selected != nil {
 						t.selected(t.currentNode)
 					}
