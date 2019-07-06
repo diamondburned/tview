@@ -291,8 +291,6 @@ type TreeView struct {
 	// The visible nodes, top-down, as set by process(). Broken.
 	nodes []*TreeNode
 
-	visibleNodes []*TreeNode
-
 	mousefn       func(*tcell.EventMouse) bool
 	lastClickTime time.Time
 	singleClick   bool
@@ -573,7 +571,6 @@ func (t *TreeView) Draw(screen tcell.Screen) {
 
 	// Build the tree if necessary.
 	t.process()
-	t.visibleNodes = t.nodes
 
 	// Scroll the tree.
 	x, y, width, height := t.GetInnerRect()
@@ -731,11 +728,11 @@ func (t *TreeView) MouseHandler() func(*tcell.EventMouse) bool {
 			_, y := ev.Position()
 			n := t.offsetY + y - 1
 
-			if n >= len(t.visibleNodes) || n < 0 {
+			if n >= len(t.nodes) || n < 0 {
 				return false
 			}
 
-			t.SetCurrentNode(t.visibleNodes[n])
+			t.SetCurrentNode(t.nodes[n])
 			if ev.When().Sub(t.lastClickTime) <= DoubleClickDuration || t.singleClick {
 				if t.currentNode != nil {
 					if t.selected != nil {
