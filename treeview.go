@@ -572,13 +572,7 @@ func (t *TreeView) Draw(screen tcell.Screen) {
 	}
 
 	// Build the tree if necessary.
-	if t.nodes == nil {
-		t.process()
-	}
-	defer func() {
-		t.nodes = nil // Rebuild during next call to Draw()
-	}()
-
+	t.process()
 	t.visibleNodes = t.nodes
 
 	// Scroll the tree.
