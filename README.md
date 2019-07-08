@@ -32,8 +32,10 @@ package primitive
 func (p *Primitive) SomeCallback() {
 	// Callback things
 
+<<<<<<< HEAD
 	tview.QueueApplication(func(app *Application) bool {
 		return true // Draw when true
 	})
 }
 ```
+
