@@ -410,6 +410,13 @@ func printWithStyle(screen tcell.Screen, text string, x, y, maxWidth, align int,
 	return drawn + tagOffset + len(escapeIndices), drawnWidth
 }
 
+// TaggedStringWidth returns the width of the given string needed to print it on
+// screen. The text may contain color tags which are not counted.
+func TaggedStringWidth(text string) int {
+	_, _, _, _, _, _, width := decomposeString(text, true, false)
+	return width
+}
+
 // PrintSimple prints white text to the screen at the given position.
 func PrintSimple(screen tcell.Screen, text string, x, y int) {
 	Print(screen, text, x, y, math.MaxInt32, AlignLeft, Styles.PrimaryTextColor)
