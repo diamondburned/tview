@@ -1,4 +1,4 @@
-module github.com/diamondburned/tview
+module github.com/diamondburned/tview/v2
 
 go 1.12
 
