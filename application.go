@@ -324,7 +324,7 @@ func Suspend(f func() error) bool {
 // for widgets/primitives to use to trigger a draw by itself.
 func ExecApplication(f func(*Application) bool) {
 	if f(application) {
-		application.draw()
+		Draw()
 	}
 }
 
@@ -355,6 +355,11 @@ func QueueUpdateDraw(f func()) {
 // It is not recommended for event to be nil.
 func QueueEvent(event tcell.Event) {
 	application.events <- event
+}
+
+// SetRoot sets the application's root, with full screen enabled.
+func SetRoot(p Primitive) {
+	application.SetRoot(p, true).SetFocus(p)
 }
 
 // SetInputCapture sets a function which captures all key events before they are
