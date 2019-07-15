@@ -193,7 +193,7 @@ EventLoop:
 				if p != nil {
 					if handler := p.InputHandler(); handler != nil {
 						handler(event, func(p Primitive) {
-							application.SetFocus(p)
+							SetFocus(p)
 						})
 
 						application.draw()
@@ -202,7 +202,7 @@ EventLoop:
 
 			case *tcell.EventMouse:
 				application.RLock()
-				atXY := application.GetComponentAt(event.Position())
+				atXY := GetComponentAt(event.Position())
 				application.RUnlock()
 
 				if atXY == nil {
@@ -357,11 +357,6 @@ func QueueEvent(event tcell.Event) {
 	application.events <- event
 }
 
-// SetRoot sets the application's root, with full screen enabled.
-func SetRoot(p Primitive) {
-	application.SetRoot(p, true).SetFocus(p)
-}
-
 // SetInputCapture sets a function which captures all key events before they are
 // forwarded to the key event handler of the primitive which currently has
 // focus. This function can then choose to forward that key event (or a
@@ -371,15 +366,14 @@ func SetRoot(p Primitive) {
 // Note that this also affects the default event handling of the application
 // itself: Such a handler can intercept the Ctrl-C event which closes the
 // applicatoon.
-func (a *Application) SetInputCapture(capture func(event *tcell.EventKey) *tcell.EventKey) *Application {
-	a.inputCapture = capture
-	return a
+func SetInputCapture(capture func(event *tcell.EventKey) *tcell.EventKey) {
+	application.inputCapture = capture
 }
 
 // GetInputCapture returns the function installed with SetInputCapture() or nil
 // if no such function has been installed.
-func (a *Application) GetInputCapture() func(event *tcell.EventKey) *tcell.EventKey {
-	return a.inputCapture
+func GetInputCapture() func(event *tcell.EventKey) *tcell.EventKey {
+	return application.inputCapture
 }
 
 // SetScreen allows you to provide your own tcell.Screen object. For most
@@ -388,26 +382,24 @@ func (a *Application) GetInputCapture() func(event *tcell.EventKey) *tcell.Event
 //
 // This function is typically called before the first call to Run(). Init() need
 // not be called on the screen.
-func (a *Application) SetScreen(screen tcell.Screen) *Application {
+func SetScreen(screen tcell.Screen) {
 	if screen == nil {
-		return a // Invalid input. Do nothing.
+		return // Invalid input. Do nothing.
 	}
 
-	a.Lock()
-	if a.Screen == nil {
+	application.Lock()
+	if application.Screen == nil {
 		// Run() has not been called yet.
-		a.Screen = screen
-		a.Unlock()
-		return a
+		application.Screen = screen
+		application.Unlock()
+		return
 	}
 
 	// Run() is already in progress. Exchange screen.
-	oldScreen := a.Screen
-	a.Unlock()
+	oldScreen := application.Screen
+	application.Unlock()
 	oldScreen.Fini()
-	a.screenReplacement <- screen
-
-	return a
+	application.screenReplacement <- screen
 }
 
 // draw actually does what Draw() promises to do.
@@ -463,30 +455,28 @@ func (a *Application) draw() *Application {
 // you may call screen.Clear().
 //
 // Provide nil to uninstall the callback function.
-func (a *Application) SetBeforeDrawFunc(handler func(screen tcell.Screen) bool) *Application {
-	a.beforeDraw = handler
-	return a
+func SetBeforeDrawFunc(handler func(screen tcell.Screen) bool) {
+	application.beforeDraw = handler
 }
 
 // GetBeforeDrawFunc returns the callback function installed with
 // SetBeforeDrawFunc() or nil if none has been installed.
-func (a *Application) GetBeforeDrawFunc() func(screen tcell.Screen) bool {
-	return a.beforeDraw
+func GetBeforeDrawFunc() func(screen tcell.Screen) bool {
+	return application.beforeDraw
 }
 
 // SetAfterDrawFunc installs a callback function which is invoked after the root
 // primitive was drawn during screen updates.
 //
 // Provide nil to uninstall the callback function.
-func (a *Application) SetAfterDrawFunc(handler func(screen tcell.Screen)) *Application {
-	a.afterDraw = handler
-	return a
+func SetAfterDrawFunc(handler func(screen tcell.Screen)) {
+	application.afterDraw = handler
 }
 
 // GetAfterDrawFunc returns the callback function installed with
 // SetAfterDrawFunc() or nil if none has been installed.
-func (a *Application) GetAfterDrawFunc() func(screen tcell.Screen) {
-	return a.afterDraw
+func GetAfterDrawFunc() func(screen tcell.Screen) {
+	return application.afterDraw
 }
 
 // SetRoot sets the root primitive for this application. If "fullscreen" is set
@@ -496,37 +486,38 @@ func (a *Application) GetAfterDrawFunc() func(screen tcell.Screen) {
 // the application starts.
 //
 // It also calls SetFocus() on the primitive.
-func (a *Application) SetRoot(root Primitive, fullscreen bool) *Application {
-	a.Lock()
-	a.root = root
-	a.rootFullscreen = fullscreen
-	if a.Screen != nil {
-		a.Screen.Clear()
+func SetRoot(root Primitive, fullscreen bool) {
+	application.Lock()
+	application.root = root
+	application.rootFullscreen = fullscreen
+	if application.Screen != nil {
+		application.Screen.Clear()
 	}
-	a.Unlock()
 
-	a.SetFocus(root)
+	application.Unlock()
 
-	return a
+	SetFocus(root)
 }
 
 // GetRoot returns the current root of the application.
-func (a *Application) GetRoot() Primitive {
-	a.RLock()
-	root := a.root
-	a.RUnlock()
+func GetRoot() Primitive {
+	application.RLock()
+	root := application.root
+	application.RUnlock()
 
 	return root
 }
 
 // ResizeToFullScreen resizes the given primitive such that it fills the entire
 // screen.
-func (a *Application) ResizeToFullScreen(p Primitive) *Application {
-	a.RLock()
-	width, height := a.Screen.Size()
-	a.RUnlock()
+func ResizeToFullScreen(p Primitive) *Application {
+	application.RLock()
+	width, height := application.Screen.Size()
+	application.RUnlock()
+
 	p.SetRect(0, 0, width, height)
-	return a
+
+	return application
 }
 
 // SetFocus sets the focus on a new primitive. All key events will be redirected
@@ -535,37 +526,38 @@ func (a *Application) ResizeToFullScreen(p Primitive) *Application {
 //
 // Blur() will be called on the previously focused primitive. Focus() will be
 // called on the new primitive.
-func (a *Application) SetFocus(p Primitive) *Application {
-	a.Lock()
-	if a.focus != nil {
-		a.focus.Blur()
-	}
-	a.focus = p
-	if a.Screen != nil {
-		a.Screen.HideCursor()
-	}
-	a.Unlock()
-	if p != nil {
-		p.Focus(func(p Primitive) {
-			a.SetFocus(p)
-		})
+func SetFocus(p Primitive) {
+	application.Lock()
+	if application.focus != nil {
+		application.focus.Blur()
 	}
 
-	return a
+	application.focus = p
+
+	if application.Screen != nil {
+		application.Screen.HideCursor()
+	}
+	application.Unlock()
+
+	if p != nil {
+		p.Focus(func(p Primitive) {
+			SetFocus(p)
+		})
+	}
 }
 
 // GetFocus returns the primitive which has the current focus. If none has it,
 // nil is returned.
-func (a *Application) GetFocus() Primitive {
-	a.RLock()
-	defer a.RUnlock()
-	return a.focus
+func GetFocus() Primitive {
+	application.RLock()
+	defer application.RUnlock()
+	return application.focus
 }
 
 // GetComponentAt returns the highest level component at the given coordinates
 // or zero if no component can be found.
-func (a *Application) GetComponentAt(x, y int) *Primitive {
-	return getComponentAtRecursively(a.root, x, y)
+func GetComponentAt(x, y int) *Primitive {
+	return getComponentAtRecursively(application.root, x, y)
 }
 
 func getComponentAtRecursively(primitive Primitive, x, y int) *Primitive {
