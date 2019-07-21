@@ -220,7 +220,6 @@ func (i *InputField) SetMaskCharacter(mask rune) *InputField {
 // into the box. An optional second string could be provided to display.
 func (i *InputField) SetAutocompleteFunc(callback func(currentText string) (entries [][2]string)) *InputField {
 	i.autocomplete = callback
-	i.Autocomplete()
 	return i
 }
 
@@ -232,11 +231,11 @@ func (i *InputField) SetAutocompleteFunc(callback func(currentText string) (entr
 // It is safe to call this function from any goroutine. Note that the input
 // field is not redrawn automatically unless called from the main goroutine
 // (e.g. in response to events).
-func (i *InputField) Autocomplete() *InputField {
+func (i *InputField) Autocomplete() *List {
 	i.autocompleteListMutex.Lock()
 	defer i.autocompleteListMutex.Unlock()
 	if i.autocomplete == nil {
-		return i
+		return nil
 	}
 
 	// Do we have any autocomplete entries?
@@ -244,7 +243,7 @@ func (i *InputField) Autocomplete() *InputField {
 	if len(i.autocompleteEntries) == 0 {
 		// No entries, no list.
 		i.autocompleteList = nil
-		return i
+		return nil
 	}
 
 	// Make a list if we have none.
@@ -278,7 +277,7 @@ func (i *InputField) Autocomplete() *InputField {
 		i.autocompleteList.SetCurrentItem(currentEntry)
 	}
 
-	return i
+	return i.autocompleteList
 }
 
 // SetAcceptanceFunc sets a handler which may reject the last character that was
