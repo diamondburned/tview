@@ -33,6 +33,8 @@ type Application struct {
 	// Fini(), to set a new screen (or nil to stop the application).
 	Screen tcell.Screen
 
+	MouseSupport bool
+
 	// The primitive which currently has the keyboard focus.
 	focus Primitive
 
@@ -75,6 +77,7 @@ func Initialize() *Application {
 			events:            make(chan tcell.Event, QueueSize),
 			updates:           make(chan func(), QueueSize),
 			screenReplacement: make(chan tcell.Screen, 1),
+			MouseSupport:      true,
 		}
 	}
 
@@ -98,8 +101,10 @@ func Run() (err error) {
 			return err
 		}
 
-		// Enable mouse
-		application.Screen.EnableMouse()
+		if application.MouseSupport {
+			// Enable mouse
+			application.Screen.EnableMouse()
+		}
 	}
 
 	// We catch panics to clean up because they mess up the terminal.
