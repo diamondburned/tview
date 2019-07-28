@@ -68,7 +68,7 @@ type InputField struct {
 	maskCharacter rune
 
 	// The cursor position as a byte index into the text string.
-	cursorPos int
+	CursorPos int
 
 	// The number of bytes of the text string skipped ahead while drawing.
 	offset int
@@ -115,7 +115,7 @@ func NewInputField() *InputField {
 // SetText sets the current text of the input field.
 func (i *InputField) SetText(text string) *InputField {
 	i.text = text
-	i.cursorPos = len(text)
+	i.CursorPos = len(text)
 	if i.changed != nil {
 		i.changed(text)
 	}
@@ -371,7 +371,7 @@ func (i *InputField) Draw(screen tcell.Screen) {
 			Print(screen, Escape(text), x, y, fieldWidth, AlignLeft, i.fieldTextColor)
 			i.offset = 0
 			iterateString(text, func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
-				if textPos >= i.cursorPos {
+				if textPos >= i.CursorPos {
 					return true
 				}
 				cursorScreenPos += screenWidth
@@ -379,16 +379,16 @@ func (i *InputField) Draw(screen tcell.Screen) {
 			})
 		} else {
 			// The text doesn't fit. Where is the cursor?
-			if i.cursorPos < 0 {
-				i.cursorPos = 0
-			} else if i.cursorPos > len(text) {
-				i.cursorPos = len(text)
+			if i.CursorPos < 0 {
+				i.CursorPos = 0
+			} else if i.CursorPos > len(text) {
+				i.CursorPos = len(text)
 			}
 			// Shift the text so the cursor is inside the field.
 			var shiftLeft int
-			if i.offset > i.cursorPos {
-				i.offset = i.cursorPos
-			} else if subWidth := runewidth.StringWidth(text[i.offset:i.cursorPos]); subWidth > fieldWidth-1 {
+			if i.offset > i.CursorPos {
+				i.offset = i.CursorPos
+			} else if subWidth := runewidth.StringWidth(text[i.offset:i.CursorPos]); subWidth > fieldWidth-1 {
 				shiftLeft = subWidth - fieldWidth + 1
 			}
 			currentOffset := i.offset
@@ -398,7 +398,7 @@ func (i *InputField) Draw(screen tcell.Screen) {
 						i.offset = textPos + textWidth
 						shiftLeft -= screenWidth
 					} else {
-						if textPos+textWidth > i.cursorPos {
+						if textPos+textWidth > i.CursorPos {
 							return true
 						}
 						cursorScreenPos += screenWidth
@@ -463,36 +463,36 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 		}()
 
 		// Movement functions.
-		home := func() { i.cursorPos = 0 }
-		end := func() { i.cursorPos = len(i.text) }
+		home := func() { i.CursorPos = 0 }
+		end := func() { i.CursorPos = len(i.text) }
 		moveLeft := func() {
-			iterateStringReverse(i.text[:i.cursorPos], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
-				i.cursorPos -= textWidth
+			iterateStringReverse(i.text[:i.CursorPos], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
+				i.CursorPos -= textWidth
 				return true
 			})
 		}
 		moveRight := func() {
-			iterateString(i.text[i.cursorPos:], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
-				i.cursorPos += textWidth
+			iterateString(i.text[i.CursorPos:], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
+				i.CursorPos += textWidth
 				return true
 			})
 		}
 		moveWordLeft := func() {
-			i.cursorPos = len(regexp.MustCompile(`\S+\s*$`).ReplaceAllString(i.text[:i.cursorPos], ""))
+			i.CursorPos = len(regexp.MustCompile(`\S+\s*$`).ReplaceAllString(i.text[:i.CursorPos], ""))
 		}
 		moveWordRight := func() {
-			i.cursorPos = len(i.text) - len(regexp.MustCompile(`^\s*\S+\s*`).ReplaceAllString(i.text[i.cursorPos:], ""))
+			i.CursorPos = len(i.text) - len(regexp.MustCompile(`^\s*\S+\s*`).ReplaceAllString(i.text[i.CursorPos:], ""))
 		}
 
 		// Add character function. Returns whether or not the rune character is
 		// accepted.
 		add := func(r rune) bool {
-			newText := i.text[:i.cursorPos] + string(r) + i.text[i.cursorPos:]
+			newText := i.text[:i.CursorPos] + string(r) + i.text[i.CursorPos:]
 			if i.accept != nil && !i.accept(newText, r) {
 				return false
 			}
 			i.text = newText
-			i.cursorPos += len(string(r))
+			i.CursorPos += len(string(r))
 			return true
 		}
 
@@ -531,26 +531,26 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 			}
 		case tcell.KeyCtrlU: // Delete all.
 			i.text = ""
-			i.cursorPos = 0
+			i.CursorPos = 0
 		case tcell.KeyCtrlK: // Delete until the end of the line.
-			i.text = i.text[:i.cursorPos]
+			i.text = i.text[:i.CursorPos]
 		case tcell.KeyCtrlW: // Delete last word.
 			lastWord := regexp.MustCompile(`\S+\s*$`)
-			newText := lastWord.ReplaceAllString(i.text[:i.cursorPos], "") + i.text[i.cursorPos:]
-			i.cursorPos -= len(i.text) - len(newText)
+			newText := lastWord.ReplaceAllString(i.text[:i.CursorPos], "") + i.text[i.CursorPos:]
+			i.CursorPos -= len(i.text) - len(newText)
 			i.text = newText
 		case tcell.KeyBackspace, tcell.KeyBackspace2: // Delete character before the cursor.
-			iterateStringReverse(i.text[:i.cursorPos], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
+			iterateStringReverse(i.text[:i.CursorPos], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
 				i.text = i.text[:textPos] + i.text[textPos+textWidth:]
-				i.cursorPos -= textWidth
+				i.CursorPos -= textWidth
 				return true
 			})
-			if i.offset >= i.cursorPos {
+			if i.offset >= i.CursorPos {
 				i.offset = 0
 			}
 		case tcell.KeyDelete: // Delete character after the cursor.
-			iterateString(i.text[i.cursorPos:], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
-				i.text = i.text[:i.cursorPos] + i.text[i.cursorPos+textWidth:]
+			iterateString(i.text[i.CursorPos:], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
+				i.text = i.text[:i.CursorPos] + i.text[i.CursorPos+textWidth:]
 				return true
 			})
 		case tcell.KeyLeft:
