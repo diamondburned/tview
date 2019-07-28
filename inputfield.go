@@ -579,7 +579,7 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 			if i.autocompleteList != nil {
 				count := i.autocompleteList.GetItemCount()
 
-				newEntry, _ := i.autocompleteList.GetCurrentItem()
+				newEntry := i.autocompleteList.GetCurrentItem()
 				newEntry++
 
 				if newEntry >= count {
@@ -593,7 +593,7 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 			}
 		case tcell.KeyUp, tcell.KeyBacktab: // Autocomplete selection.
 			if i.autocompleteList != nil {
-				newEntry, _ := i.autocompleteList.GetCurrentItem()
+				newEntry := i.autocompleteList.GetCurrentItem()
 				newEntry--
 				if newEntry < 0 {
 					newEntry = i.autocompleteList.GetItemCount() - 1
