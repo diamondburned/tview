@@ -716,7 +716,7 @@ func (t *TextView) reindexBuffer(width int) {
 		// Word-wrapped lines may have trailing whitespace. Remove it.
 		if t.wrap && t.wordWrap {
 			for _, line := range t.index {
-				if len(t.buffer) >= line.Line {
+				if line.Line > len(t.buffer)-1 {
 					continue
 				}
 
