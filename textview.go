@@ -841,7 +841,17 @@ func (t *TextView) Draw(screen tcell.Screen) {
 
 		// Get the text for this line.
 		index := t.index[line]
+
+		if index.Line > len(t.buffer)-1 {
+			continue
+		}
+
+		if index.Pos < 0 || index.NextPos > len(t.buffer[index.Line]) {
+			continue
+		}
+
 		text := t.buffer[index.Line][index.Pos:index.NextPos]
+
 		foregroundColor := index.ForegroundColor
 		backgroundColor := index.BackgroundColor
 		attributes := index.Attributes
