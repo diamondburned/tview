@@ -8,8 +8,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/diamondburned/tcell"
 	colorful "github.com/diamondburned/go-colorful"
+	"github.com/diamondburned/tcell"
 	runewidth "github.com/mattn/go-runewidth"
 )
 
@@ -716,6 +716,14 @@ func (t *TextView) reindexBuffer(width int) {
 		// Word-wrapped lines may have trailing whitespace. Remove it.
 		if t.wrap && t.wordWrap {
 			for _, line := range t.index {
+				if len(t.buffer) >= line.Line {
+					continue
+				}
+
+				if line.Pos < 0 || line.NextPos > len(t.buffer[line.Line]) {
+					continue
+				}
+
 				str := t.buffer[line.Line][line.Pos:line.NextPos]
 				spaces := spacePattern.FindAllStringIndex(str, -1)
 				if spaces != nil && spaces[len(spaces)-1][1] == len(str) {
