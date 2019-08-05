@@ -8,4 +8,5 @@ require (
 	github.com/gdamore/tcell v1.1.2
 	github.com/mattn/go-runewidth v0.0.4
 	github.com/rivo/tview v0.0.0-20190711103727-f63eca142cd2
+	golang.org/x/tools/gopls v0.1.3 // indirect
 )

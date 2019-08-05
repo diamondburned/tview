@@ -49,6 +49,8 @@ type InputField struct {
 	// The background color of the input area.
 	fieldBackgroundColor tcell.Color
 
+	fieldInvalidBackgroundColor tcell.Color
+
 	// The text color of the input area.
 	fieldTextColor tcell.Color
 
@@ -86,7 +88,8 @@ type InputField struct {
 	autocompleteListMutex sync.Mutex
 
 	// An optional function which may reject the last character that was entered.
-	accept func(text string, ch rune) bool
+	accept  func(text string, ch rune) bool
+	invalid bool
 
 	// An optional function which is called when the input has changed.
 	changed func(text string)
@@ -104,11 +107,12 @@ type InputField struct {
 // NewInputField returns a new input field.
 func NewInputField() *InputField {
 	return &InputField{
-		Box:                  NewBox(),
-		labelColor:           Styles.SecondaryTextColor,
-		fieldBackgroundColor: Styles.ContrastBackgroundColor,
-		fieldTextColor:       Styles.PrimaryTextColor,
-		placeholderTextColor: Styles.ContrastSecondaryTextColor,
+		Box:                         NewBox(),
+		labelColor:                  Styles.SecondaryTextColor,
+		fieldInvalidBackgroundColor: tcell.ColorRed,
+		fieldBackgroundColor:        Styles.ContrastBackgroundColor,
+		fieldTextColor:              Styles.PrimaryTextColor,
+		placeholderTextColor:        Styles.ContrastSecondaryTextColor,
 	}
 }
 
@@ -165,6 +169,11 @@ func (i *InputField) SetLabelColor(color tcell.Color) *InputField {
 // SetFieldBackgroundColor sets the background color of the input area.
 func (i *InputField) SetFieldBackgroundColor(color tcell.Color) *InputField {
 	i.fieldBackgroundColor = color
+	return i
+}
+
+func (i *InputField) SetFieldInvalidBackgroundColor(color tcell.Color) *InputField {
+	i.fieldInvalidBackgroundColor = color
 	return i
 }
 
@@ -348,7 +357,14 @@ func (i *InputField) Draw(screen tcell.Screen) {
 	if rightLimit-x < fieldWidth {
 		fieldWidth = rightLimit - x
 	}
-	fieldStyle := tcell.StyleDefault.Background(i.fieldBackgroundColor)
+
+	fieldStyle := tcell.StyleDefault
+	if i.invalid { // red background if invalid
+		fieldStyle = fieldStyle.Background(i.fieldInvalidBackgroundColor)
+	} else {
+		fieldStyle = fieldStyle.Background(i.fieldBackgroundColor)
+	}
+
 	for index := 0; index < fieldWidth; index++ {
 		screen.SetContent(x+index, y, ' ', nil, fieldStyle)
 	}
@@ -489,8 +505,11 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 		add := func(r rune) bool {
 			newText := i.text[:i.cursorPos] + string(r) + i.text[i.cursorPos:]
 			if i.accept != nil && !i.accept(newText, r) {
-				return false
+				i.invalid = true
+			} else {
+				i.invalid = false
 			}
+
 			i.text = newText
 			i.cursorPos += len(string(r))
 			return true
@@ -498,6 +517,10 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 
 		// Finish up.
 		finish := func(key tcell.Key) {
+			if i.invalid {
+				return
+			}
+
 			if i.done != nil {
 				i.done(key)
 			}
