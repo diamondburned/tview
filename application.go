@@ -1,7 +1,9 @@
 package tview
 
 import (
+	"errors"
 	"sync"
+	"time"
 
 	"github.com/diamondburned/tcell"
 )
@@ -9,9 +11,15 @@ import (
 // QueueSize is the size of the event/update/redraw channels.
 var QueueSize = 100
 
+// RefreshRate controls the max rate for draw calls. The default is 40Hz, as
+// most VTE terminals use 40Hz.
+var RefreshRate = 40
+
 // application exposes the whole application as a singleton. This variable will be filled
 // when Newapplication() is called.
 var application *Application
+
+var ErrUnitialized = errors.New("tview is unitialized")
 
 // Application represents the top node of an application.
 //
@@ -63,6 +71,9 @@ type Application struct {
 	// Functions queued from goroutines, used to serialize updates to primitives.
 	updates chan func()
 
+	// only draw if true
+	draw bool
+
 	// An object that the screen variable will be set to after Fini() was called.
 	// Use this channel to set a new screen object for the application
 	// (screen.Init() and draw() will be called implicitly). A value of nil will
@@ -87,6 +98,10 @@ func Initialize() *Application {
 // Run starts the application and thus the event loop. This function returns
 // when Stop() was called.
 func Run() (err error) {
+	if application == nil {
+		return ErrUnitialized
+	}
+
 	application.Lock()
 
 	// Make application.Screen if there is none yet.
@@ -119,11 +134,12 @@ func Run() (err error) {
 
 	// Draw the screen for the first time.
 	application.Unlock()
-	application.draw()
+	application.forceDraw()
 
 	// Separate loop to wait for screen events.
 	var wg sync.WaitGroup
-	wg.Add(1)
+	wg.Add(2)
+
 	go func() {
 		defer wg.Done()
 		for {
@@ -161,7 +177,20 @@ func Run() (err error) {
 			if err := screen.Init(); err != nil {
 				panic(err)
 			}
-			application.draw()
+
+			Draw()
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		ticker := time.NewTicker(time.Second / time.Duration(RefreshRate))
+		for range ticker.C {
+			if application.draw {
+				application.forceDraw()
+				application.draw = false
+			}
 		}
 	}()
 
@@ -184,7 +213,7 @@ EventLoop:
 				// Intercept keys.
 				if inputCapture != nil {
 					if event = inputCapture(event); event == nil {
-						application.draw()
+						Draw()
 						continue // Don't forward event.
 					}
 				}
@@ -201,7 +230,7 @@ EventLoop:
 							SetFocus(p)
 						})
 
-						application.draw()
+						Draw()
 					}
 				}
 
@@ -220,7 +249,7 @@ EventLoop:
 				}
 
 				if handler := mouseSupport.MouseHandler(); handler != nil && handler(event) {
-					application.draw()
+					Draw()
 				}
 
 			case *tcell.EventResize:
@@ -233,7 +262,7 @@ EventLoop:
 				}
 
 				screen.Clear()
-				application.draw()
+				application.forceDraw()
 			}
 
 		// If we have updates, now is the time to execute them.
@@ -267,9 +296,7 @@ func Stop() {
 // function of the application's root primitive and then syncs the screen
 // buffer.
 func Draw() {
-	QueueUpdate(func() {
-		application.draw()
-	})
+	application.draw = true
 }
 
 // ForceDraw refreshes the screen immediately. Use this function with caution as
@@ -280,7 +307,7 @@ func Draw() {
 // It is safe to call this function during queued updates and direct event
 // handling.
 func ForceDraw() {
-	application.draw()
+	application.forceDraw()
 }
 
 // Suspend temporarily suspends the application by exiting terminal UI mode and
@@ -351,7 +378,7 @@ func QueueUpdate(f func()) {
 func QueueUpdateDraw(f func()) {
 	QueueUpdate(func() {
 		f()
-		application.draw()
+		Draw()
 	})
 }
 
@@ -407,8 +434,8 @@ func SetScreen(screen tcell.Screen) {
 	application.screenReplacement <- screen
 }
 
-// draw actually does what Draw() promises to do.
-func (a *Application) draw() *Application {
+// forceDraw actually does what Draw() promises to do.
+func (a *Application) forceDraw() *Application {
 	a.Lock()
 	defer a.Unlock()
 
@@ -435,6 +462,12 @@ func (a *Application) draw() *Application {
 			screen.Show()
 			return a
 		}
+	}
+
+	// If no background is drawn, clear the old buffer so the old runes aren't
+	// there
+	if Styles.PrimitiveBackgroundColor == -1 {
+		screen.Clear()
 	}
 
 	// Draw all primitives.
