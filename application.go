@@ -48,6 +48,9 @@ type Application struct {
 	// Whether or not the application resizes the root primitive.
 	rootFullscreen bool
 
+	// Ticker for the refresh rate
+	drawTicker *time.Ticker
+
 	// An optional capture function which receives a key event and returns the
 	// event to be forwarded to the default input handler (nil if nothing should
 	// be forwarded).
@@ -173,8 +176,8 @@ func (a *Application) Run() (err error) {
 	go func() {
 		defer wg.Done()
 
-		ticker := time.NewTicker(time.Second / time.Duration(RefreshRate))
-		for range ticker.C {
+		a.drawTicker = time.NewTicker(time.Second / time.Duration(RefreshRate))
+		for range a.drawTicker.C {
 			if a.draw {
 				a.forceDraw()
 				a.draw = false
@@ -274,6 +277,7 @@ func (a *Application) Stop() {
 	a.Screen.Fini()
 	a.Screen = nil
 	a.screenReplacement <- nil
+	a.drawTicker.Stop()
 }
 
 // Draw refreshes the screen (during the next update cycle). It calls the Draw()
