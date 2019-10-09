@@ -129,10 +129,11 @@ func (a *Application) Run() (err error) {
 
 	// Separate loop to wait for screen events.
 	var wg sync.WaitGroup
-	wg.Add(2)
 
 	go func() {
+		wg.Add(1)
 		defer wg.Done()
+
 		for {
 			a.RLock()
 			screen := a.Screen
@@ -173,14 +174,22 @@ func (a *Application) Run() (err error) {
 		}
 	}()
 
+	stopDraw := make(chan struct{})
 	go func() {
+		wg.Add(1)
 		defer wg.Done()
 
-		a.drawTicker = time.NewTicker(time.Second / time.Duration(RefreshRate))
-		for range a.drawTicker.C {
-			if a.draw {
-				a.forceDraw()
-				a.draw = false
+		drawTicker := time.NewTicker(time.Second / time.Duration(RefreshRate))
+		for {
+			select {
+			case <-drawTicker.C:
+				if a.draw {
+					a.forceDraw()
+					a.draw = false
+				}
+			case <-stopDraw:
+				drawTicker.Stop()
+				return
 			}
 		}
 	}()
@@ -258,6 +267,8 @@ EventLoop:
 		}
 	}
 
+	stopDraw <- struct{}{}
+
 	// Wait for the event loop to finish.
 	wg.Wait()
 	a.Screen = nil
@@ -277,7 +288,6 @@ func (a *Application) Stop() {
 	a.Screen.Fini()
 	a.Screen = nil
 	a.screenReplacement <- nil
-	a.drawTicker.Stop()
 }
 
 // Draw refreshes the screen (during the next update cycle). It calls the Draw()
