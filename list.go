@@ -492,9 +492,9 @@ func (l *List) InputHandler() func(event *tcell.EventKey, setFocus func(p Primit
 		previousItem := l.currentItem
 
 		switch key := event.Key(); key {
-		case tcell.KeyTab, tcell.KeyDown, tcell.KeyRight:
+		case tcell.KeyTab, tcell.KeyDown, tcell.KeyRight, tcell.KeyCtrlN:
 			l.currentItem++
-		case tcell.KeyBacktab, tcell.KeyUp, tcell.KeyLeft:
+		case tcell.KeyBacktab, tcell.KeyUp, tcell.KeyLeft, tcell.KeyCtrlP:
 			l.currentItem--
 		case tcell.KeyHome:
 			l.currentItem = 0
