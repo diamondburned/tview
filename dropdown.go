@@ -84,8 +84,9 @@ type DropDown struct {
 
 // NewDropDown returns a new drop-down.
 func NewDropDown() *DropDown {
-	list := NewList().ShowSecondaryText(false)
-	list.SetMainTextColor(Styles.PrimitiveBackgroundColor).
+	list := NewList()
+	list.ShowSecondaryText(false).
+		SetMainTextColor(Styles.PrimitiveBackgroundColor).
 		SetSelectedTextColor(Styles.PrimitiveBackgroundColor).
 		SetSelectedBackgroundColor(Styles.PrimaryTextColor).
 		SetHighlightFullLine(true).
@@ -178,7 +179,7 @@ func (d *DropDown) SetFieldTextColor(color tcell.Color) *DropDown {
 }
 
 // SetPrefixTextColor sets the color of the prefix string. The prefix string is
-// shown when the user starts typing text, which directly selects the first
+// shown when the user starts t<<<<yping text, which directly selects the first
 // option that starts with the typed string.
 func (d *DropDown) SetPrefixTextColor(color tcell.Color) *DropDown {
 	d.prefixTextColor = color

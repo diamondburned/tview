@@ -4,6 +4,7 @@ import (
 	"math"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/diamondburned/tcell"
@@ -48,6 +49,8 @@ type InputField struct {
 	// The background color of the input area.
 	fieldBackgroundColor tcell.Color
 
+	fieldInvalidBackgroundColor tcell.Color
+
 	// The text color of the input area.
 	fieldTextColor tcell.Color
 
@@ -67,13 +70,26 @@ type InputField struct {
 	maskCharacter rune
 
 	// The cursor position as a byte index into the text string.
-	cursorPos int
+	CursorPos int
 
 	// The number of bytes of the text string skipped ahead while drawing.
 	offset int
 
+	// An optional autocomplete function which receives the current text of the
+	// input field and returns a slice of strings to be displayed in a drop-down
+	// selection.
+	autocomplete func(text string) [][2]string
+
+	autocompleteEntries [][2]string
+
+	// The List object which shows the selectable autocomplete entries. If not
+	// nil, the list's main texts represent the current autocomplete entries.
+	autocompleteList      *List
+	autocompleteListMutex sync.Mutex
+
 	// An optional function which may reject the last character that was entered.
-	accept func(text string, ch rune) bool
+	accept  func(text string, ch rune) bool
+	invalid bool
 
 	// An optional function which is called when the input has changed.
 	changed func(text string)
@@ -91,18 +107,19 @@ type InputField struct {
 // NewInputField returns a new input field.
 func NewInputField() *InputField {
 	return &InputField{
-		Box:                  NewBox(),
-		labelColor:           Styles.SecondaryTextColor,
-		fieldBackgroundColor: Styles.ContrastBackgroundColor,
-		fieldTextColor:       Styles.PrimaryTextColor,
-		placeholderTextColor: Styles.ContrastSecondaryTextColor,
+		Box:                         NewBox(),
+		labelColor:                  Styles.SecondaryTextColor,
+		fieldInvalidBackgroundColor: tcell.ColorRed,
+		fieldBackgroundColor:        Styles.ContrastBackgroundColor,
+		fieldTextColor:              Styles.PrimaryTextColor,
+		placeholderTextColor:        Styles.ContrastSecondaryTextColor,
 	}
 }
 
 // SetText sets the current text of the input field.
 func (i *InputField) SetText(text string) *InputField {
 	i.text = text
-	i.cursorPos = len(text)
+	i.CursorPos = len(text)
 	if i.changed != nil {
 		i.changed(text)
 	}
@@ -155,6 +172,11 @@ func (i *InputField) SetFieldBackgroundColor(color tcell.Color) *InputField {
 	return i
 }
 
+func (i *InputField) SetFieldInvalidBackgroundColor(color tcell.Color) *InputField {
+	i.fieldInvalidBackgroundColor = color
+	return i
+}
+
 // SetFieldTextColor sets the text color of the input area.
 func (i *InputField) SetFieldTextColor(color tcell.Color) *InputField {
 	i.fieldTextColor = color
@@ -194,6 +216,77 @@ func (i *InputField) GetFieldWidth() int {
 func (i *InputField) SetMaskCharacter(mask rune) *InputField {
 	i.maskCharacter = mask
 	return i
+}
+
+// SetAutocompleteFunc sets an autocomplete callback function which may return
+// strings to be selected from a drop-down based on the current text of the
+// input field. The drop-down appears only if len(entries) > 0. The callback is
+// invoked in this function and whenever the current text changes or when
+// Autocomplete() is called. Entries are cleared when the user selects an entry
+// or presses Escape.
+//
+// Each entry is an array of 2 strings. The first string is what will be placed
+// into the box. An optional second string could be provided to display.
+func (i *InputField) SetAutocompleteFunc(callback func(currentText string) (entries [][2]string)) *InputField {
+	i.autocomplete = callback
+	return i
+}
+
+// Autocomplete invokes the autocomplete callback (if there is one). If the
+// length of the returned autocomplete entries slice is greater than 0, the
+// input field will present the user with a corresponding drop-down list the
+// next time the input field is drawn.
+//
+// It is safe to call this function from any goroutine. Note that the input
+// field is not redrawn automatically unless called from the main goroutine
+// (e.g. in response to events).
+func (i *InputField) Autocomplete() *List {
+	i.autocompleteListMutex.Lock()
+	defer i.autocompleteListMutex.Unlock()
+	if i.autocomplete == nil {
+		return nil
+	}
+
+	// Do we have any autocomplete entries?
+	i.autocompleteEntries = i.autocomplete(i.text)
+	if len(i.autocompleteEntries) == 0 {
+		// No entries, no list.
+		i.autocompleteList = nil
+		return nil
+	}
+
+	// Make a list if we have none.
+	if i.autocompleteList == nil {
+		i.autocompleteList = NewList()
+		i.autocompleteList.ShowSecondaryText(false).
+			SetMainTextColor(Styles.PrimitiveBackgroundColor).
+			SetSelectedTextColor(Styles.PrimitiveBackgroundColor).
+			SetSelectedBackgroundColor(Styles.PrimaryTextColor).
+			SetHighlightFullLine(true).
+			SetBackgroundColor(Styles.MoreContrastBackgroundColor)
+	}
+
+	// Fill it with the entries.
+	currentEntry := -1
+	i.autocompleteList.Clear()
+	for index, entry := range i.autocompleteEntries {
+		if entry[1] != "" {
+			i.autocompleteList.AddItem(entry[0], "", 0, nil)
+		} else {
+			i.autocompleteList.AddItem(entry[1], "", 0, nil)
+		}
+
+		if currentEntry < 0 && entry[0] == i.text {
+			currentEntry = index
+		}
+	}
+
+	// Set the selection if we have one.
+	if currentEntry >= 0 {
+		i.autocompleteList.SetCurrentItem(currentEntry)
+	}
+
+	return i.autocompleteList
 }
 
 // SetAcceptanceFunc sets a handler which may reject the last character that was
@@ -264,7 +357,14 @@ func (i *InputField) Draw(screen tcell.Screen) {
 	if rightLimit-x < fieldWidth {
 		fieldWidth = rightLimit - x
 	}
-	fieldStyle := tcell.StyleDefault.Background(i.fieldBackgroundColor)
+
+	fieldStyle := tcell.StyleDefault
+	if i.invalid { // red background if invalid
+		fieldStyle = fieldStyle.Background(i.fieldInvalidBackgroundColor)
+	} else {
+		fieldStyle = fieldStyle.Background(i.fieldBackgroundColor)
+	}
+
 	for index := 0; index < fieldWidth; index++ {
 		screen.SetContent(x+index, y, ' ', nil, fieldStyle)
 	}
@@ -287,7 +387,7 @@ func (i *InputField) Draw(screen tcell.Screen) {
 			Print(screen, Escape(text), x, y, fieldWidth, AlignLeft, i.fieldTextColor)
 			i.offset = 0
 			iterateString(text, func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
-				if textPos >= i.cursorPos {
+				if textPos >= i.CursorPos {
 					return true
 				}
 				cursorScreenPos += screenWidth
@@ -295,16 +395,16 @@ func (i *InputField) Draw(screen tcell.Screen) {
 			})
 		} else {
 			// The text doesn't fit. Where is the cursor?
-			if i.cursorPos < 0 {
-				i.cursorPos = 0
-			} else if i.cursorPos > len(text) {
-				i.cursorPos = len(text)
+			if i.CursorPos < 0 {
+				i.CursorPos = 0
+			} else if i.CursorPos > len(text) {
+				i.CursorPos = len(text)
 			}
 			// Shift the text so the cursor is inside the field.
 			var shiftLeft int
-			if i.offset > i.cursorPos {
-				i.offset = i.cursorPos
-			} else if subWidth := runewidth.StringWidth(text[i.offset:i.cursorPos]); subWidth > fieldWidth-1 {
+			if i.offset > i.CursorPos {
+				i.offset = i.CursorPos
+			} else if subWidth := runewidth.StringWidth(text[i.offset:i.CursorPos]); subWidth > fieldWidth-1 {
 				shiftLeft = subWidth - fieldWidth + 1
 			}
 			currentOffset := i.offset
@@ -314,7 +414,7 @@ func (i *InputField) Draw(screen tcell.Screen) {
 						i.offset = textPos + textWidth
 						shiftLeft -= screenWidth
 					} else {
-						if textPos+textWidth > i.cursorPos {
+						if textPos+textWidth > i.CursorPos {
 							return true
 						}
 						cursorScreenPos += screenWidth
@@ -324,6 +424,38 @@ func (i *InputField) Draw(screen tcell.Screen) {
 			})
 			Print(screen, Escape(text[i.offset:]), x, y, fieldWidth, AlignLeft, i.fieldTextColor)
 		}
+	}
+
+	// Draw autocomplete list.
+	i.autocompleteListMutex.Lock()
+	defer i.autocompleteListMutex.Unlock()
+	if i.autocompleteList != nil {
+		// How much space do we need?
+		lheight := i.autocompleteList.GetItemCount()
+		lwidth := 0
+		for index := 0; index < lheight; index++ {
+			entry, _ := i.autocompleteList.GetItemText(index)
+			width := TaggedStringWidth(entry)
+			if width > lwidth {
+				lwidth = width
+			}
+		}
+
+		// We prefer to drop down but if there is no space, maybe drop up?
+		lx := x
+		ly := y + 1
+		_, sheight := screen.Size()
+		if ly+lheight >= sheight && ly-2 > lheight-ly {
+			ly = y - lheight
+			if ly < 0 {
+				ly = 0
+			}
+		}
+		if ly+lheight >= sheight {
+			lheight = sheight - ly
+		}
+		i.autocompleteList.SetRect(lx, ly, lwidth, lheight)
+		i.autocompleteList.Draw(screen)
 	}
 
 	// Set cursor.
@@ -338,46 +470,68 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 		// Trigger changed events.
 		currentText := i.text
 		defer func() {
-			if i.text != currentText && i.changed != nil {
-				i.changed(i.text)
+			if i.text != currentText {
+				i.Autocomplete()
+				if i.changed != nil {
+					i.changed(i.text)
+				}
 			}
 		}()
 
 		// Movement functions.
-		home := func() { i.cursorPos = 0 }
-		end := func() { i.cursorPos = len(i.text) }
+		home := func() { i.CursorPos = 0 }
+		end := func() { i.CursorPos = len(i.text) }
 		moveLeft := func() {
-			iterateStringReverse(i.text[:i.cursorPos], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
-				i.cursorPos -= textWidth
+			iterateStringReverse(i.text[:i.CursorPos], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
+				i.CursorPos -= textWidth
 				return true
 			})
 		}
 		moveRight := func() {
-			iterateString(i.text[i.cursorPos:], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
-				i.cursorPos += textWidth
+			iterateString(i.text[i.CursorPos:], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
+				i.CursorPos += textWidth
 				return true
 			})
 		}
 		moveWordLeft := func() {
-			i.cursorPos = len(regexp.MustCompile(`\S+\s*$`).ReplaceAllString(i.text[:i.cursorPos], ""))
+			i.CursorPos = len(regexp.MustCompile(`\S+\s*$`).ReplaceAllString(i.text[:i.CursorPos], ""))
 		}
 		moveWordRight := func() {
-			i.cursorPos = len(i.text) - len(regexp.MustCompile(`^\s*\S+\s*`).ReplaceAllString(i.text[i.cursorPos:], ""))
+			i.CursorPos = len(i.text) - len(regexp.MustCompile(`^\s*\S+\s*`).ReplaceAllString(i.text[i.CursorPos:], ""))
 		}
 
 		// Add character function. Returns whether or not the rune character is
 		// accepted.
 		add := func(r rune) bool {
-			newText := i.text[:i.cursorPos] + string(r) + i.text[i.cursorPos:]
+			newText := i.text[:i.CursorPos] + string(r) + i.text[i.CursorPos:]
 			if i.accept != nil && !i.accept(newText, r) {
-				return false
+				i.invalid = true
+			} else {
+				i.invalid = false
 			}
+
 			i.text = newText
-			i.cursorPos += len(string(r))
+			i.CursorPos += len(string(r))
 			return true
 		}
 
+		// Finish up.
+		finish := func(key tcell.Key) {
+			if i.invalid {
+				return
+			}
+
+			if i.done != nil {
+				i.done(key)
+			}
+			if i.finished != nil {
+				i.finished(key)
+			}
+		}
+
 		// Process key event.
+		i.autocompleteListMutex.Lock()
+		defer i.autocompleteListMutex.Unlock()
 		switch key := event.Key(); key {
 		case tcell.KeyRune: // Regular character.
 			if event.Modifiers()&tcell.ModAlt > 0 {
@@ -400,26 +554,26 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 			}
 		case tcell.KeyCtrlU: // Delete all.
 			i.text = ""
-			i.cursorPos = 0
+			i.CursorPos = 0
 		case tcell.KeyCtrlK: // Delete until the end of the line.
-			i.text = i.text[:i.cursorPos]
+			i.text = i.text[:i.CursorPos]
 		case tcell.KeyCtrlW: // Delete last word.
 			lastWord := regexp.MustCompile(`\S+\s*$`)
-			newText := lastWord.ReplaceAllString(i.text[:i.cursorPos], "") + i.text[i.cursorPos:]
-			i.cursorPos -= len(i.text) - len(newText)
+			newText := lastWord.ReplaceAllString(i.text[:i.CursorPos], "") + i.text[i.CursorPos:]
+			i.CursorPos -= len(i.text) - len(newText)
 			i.text = newText
 		case tcell.KeyBackspace, tcell.KeyBackspace2: // Delete character before the cursor.
-			iterateStringReverse(i.text[:i.cursorPos], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
+			iterateStringReverse(i.text[:i.CursorPos], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
 				i.text = i.text[:textPos] + i.text[textPos+textWidth:]
-				i.cursorPos -= textWidth
+				i.CursorPos -= textWidth
 				return true
 			})
-			if i.offset >= i.cursorPos {
+			if i.offset >= i.CursorPos {
 				i.offset = 0
 			}
 		case tcell.KeyDelete: // Delete character after the cursor.
-			iterateString(i.text[i.cursorPos:], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
-				i.text = i.text[:i.cursorPos] + i.text[i.cursorPos+textWidth:]
+			iterateString(i.text[i.CursorPos:], func(main rune, comb []rune, textPos, textWidth, screenPos, screenWidth int) bool {
+				i.text = i.text[:i.CursorPos] + i.text[i.CursorPos+textWidth:]
 				return true
 			})
 		case tcell.KeyLeft:
@@ -438,12 +592,40 @@ func (i *InputField) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 			home()
 		case tcell.KeyEnd, tcell.KeyCtrlE:
 			end()
-		case tcell.KeyEnter, tcell.KeyTab, tcell.KeyBacktab, tcell.KeyEscape: // We're done.
-			if i.done != nil {
-				i.done(key)
+		case tcell.KeyEnter, tcell.KeyEscape: // We might be done.
+			if i.autocompleteList != nil {
+				i.autocompleteList = nil
+			} else {
+				finish(key)
 			}
-			if i.finished != nil {
-				i.finished(key)
+		case tcell.KeyDown, tcell.KeyTab: // Autocomplete selection.
+			if i.autocompleteList != nil {
+				count := i.autocompleteList.GetItemCount()
+
+				newEntry := i.autocompleteList.GetCurrentItem()
+				newEntry++
+
+				if newEntry >= count {
+					newEntry = 0
+				}
+
+				i.autocompleteList.SetCurrentItem(newEntry)
+				i.SetText(i.autocompleteEntries[newEntry][0])
+			} else {
+				finish(key)
+			}
+		case tcell.KeyUp, tcell.KeyBacktab: // Autocomplete selection.
+			if i.autocompleteList != nil {
+				newEntry := i.autocompleteList.GetCurrentItem()
+				newEntry--
+				if newEntry < 0 {
+					newEntry = i.autocompleteList.GetItemCount() - 1
+				}
+
+				i.autocompleteList.SetCurrentItem(newEntry)
+				i.SetText(i.autocompleteEntries[newEntry][0])
+			} else {
+				finish(key)
 			}
 		}
 	})

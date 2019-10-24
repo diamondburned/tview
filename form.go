@@ -159,14 +159,16 @@ func (f *Form) SetButtonTextColor(color tcell.Color) *Form {
 // an optional accept function to validate the item's value (set to nil to
 // accept any text), and an (optional) callback function which is invoked when
 // the input field's text has changed.
-func (f *Form) AddInputField(label, value string, fieldWidth int, accept func(textToCheck string, lastChar rune) bool, changed func(text string)) *Form {
-	f.items = append(f.items, NewInputField().
+func (f *Form) AddInputField(label, value string, fieldWidth int, accept func(textToCheck string, lastChar rune) bool, changed func(text string)) *InputField {
+	p := NewInputField().
 		SetLabel(label).
 		SetText(value).
 		SetFieldWidth(fieldWidth).
 		SetAcceptanceFunc(accept).
-		SetChangedFunc(changed))
-	return f
+		SetChangedFunc(changed)
+
+	f.items = append(f.items, p)
+	return p
 }
 
 // AddPasswordField adds a password field to the form. This is similar to an
@@ -175,47 +177,56 @@ func (f *Form) AddInputField(label, value string, fieldWidth int, accept func(te
 // value, a field width (a value of 0 extends it as far as possible), and an
 // (optional) callback function which is invoked when the input field's text has
 // changed.
-func (f *Form) AddPasswordField(label, value string, fieldWidth int, mask rune, changed func(text string)) *Form {
+func (f *Form) AddPasswordField(label, value string, fieldWidth int, mask rune, changed func(text string)) *InputField {
 	if mask == 0 {
 		mask = '*'
 	}
-	f.items = append(f.items, NewInputField().
+
+	p := NewInputField().
 		SetLabel(label).
 		SetText(value).
 		SetFieldWidth(fieldWidth).
 		SetMaskCharacter(mask).
-		SetChangedFunc(changed))
-	return f
+		SetChangedFunc(changed)
+
+	f.items = append(f.items, p)
+	return p
 }
 
 // AddDropDown adds a drop-down element to the form. It has a label, options,
 // and an (optional) callback function which is invoked when an option was
 // selected. The initial option may be a negative value to indicate that no
 // option is currently selected.
-func (f *Form) AddDropDown(label string, options []string, initialOption int, selected func(option string, optionIndex int)) *Form {
-	f.items = append(f.items, NewDropDown().
+func (f *Form) AddDropDown(label string, options []string, initialOption int, selected func(option string, optionIndex int)) *DropDown {
+	p := NewDropDown().
 		SetLabel(label).
 		SetOptions(options, selected).
-		SetCurrentOption(initialOption))
-	return f
+		SetCurrentOption(initialOption)
+
+	f.items = append(f.items, p)
+	return p
 }
 
 // AddCheckbox adds a checkbox to the form. It has a label, an initial state,
 // and an (optional) callback function which is invoked when the state of the
 // checkbox was changed by the user.
-func (f *Form) AddCheckbox(label string, checked bool, changed func(checked bool)) *Form {
-	f.items = append(f.items, NewCheckbox().
+func (f *Form) AddCheckbox(label string, checked bool, changed func(checked bool)) *Checkbox {
+	p := NewCheckbox().
 		SetLabel(label).
 		SetChecked(checked).
-		SetChangedFunc(changed))
-	return f
+		SetChangedFunc(changed)
+
+	f.items = append(f.items, p)
+	return p
 }
 
 // AddButton adds a new button to the form. The "selected" function is called
 // when the user selects this button. It may be nil.
-func (f *Form) AddButton(label string, selected func()) *Form {
-	f.buttons = append(f.buttons, NewButton(label).SetSelectedFunc(selected))
-	return f
+func (f *Form) AddButton(label string, selected func()) *Button {
+	b := NewButton(label).SetSelectedFunc(selected)
+
+	f.buttons = append(f.buttons, b)
+	return b
 }
 
 // GetButton returns the button at the specified 0-based index. Note that

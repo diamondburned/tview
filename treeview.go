@@ -763,6 +763,6 @@ func (t *TreeView) MouseHandler() func(*tcell.EventMouse) bool {
 }
 
 func (t *TreeView) SetSingleClick(s bool) *TreeView {
-	t.singleClick = s
-	return t
+       t.singleClick = s
+       return t
 }
